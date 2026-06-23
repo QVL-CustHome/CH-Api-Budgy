@@ -17,5 +17,5 @@ fn operational_routes() -> Router<AppState> {
 }
 
 fn public_routes() -> Router<AppState> {
-    Router::new()
+    Router::new().route("/me", get(handlers::me::me))
 }

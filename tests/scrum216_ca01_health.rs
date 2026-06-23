@@ -4,14 +4,25 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::routes::router;
+use ch_api_budgy::services::jwt::JwtService;
 use ch_api_budgy::state::AppState;
 use common::DisposableDb;
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tower::ServiceExt;
 
+const TEST_JWT_SECRET: &str = "secret-de-test-jwt-suffisamment-long-32o!";
+
 fn test_crypto() -> Arc<CryptoService> {
     Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap())
+}
+
+fn test_jwt() -> Arc<JwtService> {
+    Arc::new(JwtService::from_secret(
+        TEST_JWT_SECRET,
+        "ch-api-authenticator",
+        "ch-api-budgy",
+    ))
 }
 
 macro_rules! require_db {
@@ -53,6 +64,7 @@ async fn health_repond_200() {
         AppState {
             db: db.pool.clone(),
             crypto: test_crypto(),
+            jwt: test_jwt(),
         },
         "/health",
     )
@@ -68,6 +80,7 @@ async fn health_renvoie_corps_json_exact() {
         AppState {
             db: db.pool.clone(),
             crypto: test_crypto(),
+            jwt: test_jwt(),
         },
         "/health",
     )

@@ -50,10 +50,12 @@ fn ca06_debug_des_secrets_ne_revele_pas_la_cle() {
                 port: 8183,
                 log_level: "INFO".to_string(),
             },
+            token: config::TokenConfig::default(),
         },
         secrets: config::Secrets {
             database_url: "postgres://user:motdepasse@localhost/db".to_string(),
             encryption_key: TEST_KEY.to_vec(),
+            jwt_secret: "secret-de-test-jwt-suffisamment-long-32o!".to_string(),
         },
     };
 
@@ -110,13 +112,13 @@ fn load_outcome(key: Option<&str>) -> LoadOutcome {
 
 #[test]
 fn ca04_load_echoue_si_cle_absente() {
-    let _guard = ENV_GUARD.lock().unwrap();
+    let _guard = ENV_GUARD.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(load_outcome(None), LoadOutcome::MissingSecret);
 }
 
 #[test]
 fn ca04_load_echoue_si_base64_invalide() {
-    let _guard = ENV_GUARD.lock().unwrap();
+    let _guard = ENV_GUARD.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
         load_outcome(Some("ceci n'est pas du base64 valide !!!")),
         LoadOutcome::InvalidEncryptionKey
@@ -125,7 +127,7 @@ fn ca04_load_echoue_si_base64_invalide() {
 
 #[test]
 fn ca04_load_echoue_si_longueur_differente_de_32_octets() {
-    let _guard = ENV_GUARD.lock().unwrap();
+    let _guard = ENV_GUARD.lock().unwrap_or_else(|e| e.into_inner());
     let seize_octets_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
     assert_eq!(
         load_outcome(Some(seize_octets_b64)),
@@ -135,7 +137,7 @@ fn ca04_load_echoue_si_longueur_differente_de_32_octets() {
 
 #[test]
 fn ca04_load_accepte_une_cle_valide_de_32_octets() {
-    let _guard = ENV_GUARD.lock().unwrap();
+    let _guard = ENV_GUARD.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
         load_outcome(Some(TEST_KEY_B64)),
         LoadOutcome::Ok { key_len: 32 }
@@ -150,9 +152,11 @@ fn with_env<R>(key: Option<&str>, run: impl FnOnce(&str) -> R) -> R {
 
     let prev_db = std::env::var("DATABASE_URL").ok();
     let prev_key = std::env::var("BUDGY_ENCRYPTION_KEY").ok();
+    let prev_jwt = std::env::var("JWT_SECRET").ok();
 
     unsafe {
         std::env::set_var("DATABASE_URL", "postgres://u:p@localhost/db");
+        std::env::set_var("JWT_SECRET", "secret-de-test-jwt-suffisamment-long-32o!");
         match key {
             Some(v) => std::env::set_var("BUDGY_ENCRYPTION_KEY", v),
             None => std::env::remove_var("BUDGY_ENCRYPTION_KEY"),
@@ -169,6 +173,10 @@ fn with_env<R>(key: Option<&str>, run: impl FnOnce(&str) -> R) -> R {
         match prev_key {
             Some(v) => std::env::set_var("BUDGY_ENCRYPTION_KEY", v),
             None => std::env::remove_var("BUDGY_ENCRYPTION_KEY"),
+        }
+        match prev_jwt {
+            Some(v) => std::env::set_var("JWT_SECRET", v),
+            None => std::env::remove_var("JWT_SECRET"),
         }
     }
     std::fs::remove_dir_all(&dir).ok();
