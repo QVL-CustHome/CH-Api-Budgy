@@ -2,11 +2,17 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::state::AppState;
 use common::DisposableDb;
 use http_body_util::BodyExt;
+use std::sync::Arc;
 use tower::ServiceExt;
+
+fn test_crypto() -> Arc<CryptoService> {
+    Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap())
+}
 
 macro_rules! require_db {
     () => {
@@ -46,6 +52,7 @@ async fn health_repond_200() {
     let (status, _) = get(
         AppState {
             db: db.pool.clone(),
+            crypto: test_crypto(),
         },
         "/health",
     )
@@ -60,6 +67,7 @@ async fn health_renvoie_corps_json_exact() {
     let (_, corps) = get(
         AppState {
             db: db.pool.clone(),
+            crypto: test_crypto(),
         },
         "/health",
     )

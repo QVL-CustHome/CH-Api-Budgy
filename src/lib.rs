@@ -1,7 +1,9 @@
 pub mod config;
+pub mod crypto;
 pub mod db;
 pub mod domain;
 pub mod error;
 pub mod handlers;
+pub mod repository;
 pub mod routes;
 pub mod state;
