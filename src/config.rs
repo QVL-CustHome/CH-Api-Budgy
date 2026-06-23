@@ -6,6 +6,8 @@ use serde::Deserialize;
 pub enum ConfigError {
     #[error("fichier de configuration invalide : {0}")]
     File(Box<figment::Error>),
+    #[error("variable d'environnement requise manquante ou vide : {0}")]
+    MissingSecret(&'static str),
 }
 
 impl From<figment::Error> for ConfigError {
@@ -26,8 +28,10 @@ pub struct ServerConfig {
     pub log_level: String,
 }
 
-#[derive(Clone, Default)]
-pub struct Secrets {}
+#[derive(Clone)]
+pub struct Secrets {
+    pub database_url: String,
+}
 
 impl std::fmt::Debug for Secrets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -50,10 +54,15 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         config.server.port = port;
     }
 
-    Ok(Settings {
-        config,
-        secrets: Secrets::default(),
-    })
+    let secrets = Secrets {
+        database_url: require("DATABASE_URL")?,
+    };
+
+    Ok(Settings { config, secrets })
+}
+
+fn require(name: &'static str) -> Result<String, ConfigError> {
+    optional(name).ok_or(ConfigError::MissingSecret(name))
 }
 
 fn optional(name: &str) -> Option<String> {

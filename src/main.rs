@@ -1,4 +1,5 @@
 use ch_api_budgy::config;
+use ch_api_budgy::db;
 use ch_api_budgy::routes;
 use ch_api_budgy::state::AppState;
 
@@ -16,8 +17,23 @@ async fn main() {
 
     init_tracing(&settings.config.server.log_level);
 
+    let pool = match db::connect(&settings.secrets.database_url).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(error = %e, "PostgreSQL injoignable");
+            eprintln!("Démarrage impossible — PostgreSQL injoignable : {e}");
+            std::process::exit(1);
+        }
+    };
+
+    if let Err(e) = db::migrate(&pool).await {
+        tracing::error!(error = %e, "Migrations en échec");
+        eprintln!("Démarrage impossible — migrations en échec : {e}");
+        std::process::exit(1);
+    }
+
     let port = settings.config.server.port;
-    let state = AppState::new(&settings);
+    let state = AppState::new(&settings, pool);
     let app = routes::router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
