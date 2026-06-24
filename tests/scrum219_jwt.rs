@@ -241,7 +241,7 @@ async fn get_me(state: AppState, authorization: Option<&str>) -> (StatusCode, St
 async fn ca01_route_me_accepte_un_token_valide_et_renvoie_owner_id() {
     let token = sign(
         TEST_SECRET,
-        &valid_claims("owner-abc", json!(["budgy:reader"])),
+        &valid_claims("owner-abc", json!(["budgy"])),
     );
 
     let (status, corps) = get_me(test_state(), Some(&format!("Bearer {token}"))).await;
@@ -249,7 +249,7 @@ async fn ca01_route_me_accepte_un_token_valide_et_renvoie_owner_id() {
     assert_eq!(status, StatusCode::OK);
     let body: Value = serde_json::from_str(&corps).unwrap();
     assert_eq!(body["owner_id"], json!("owner-abc"));
-    assert_eq!(body["roles"], json!(["budgy:reader"]));
+    assert_eq!(body["roles"], json!(["budgy"]));
 }
 
 #[tokio::test]
