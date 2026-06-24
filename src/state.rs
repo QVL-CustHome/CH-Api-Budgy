@@ -1,6 +1,8 @@
 use crate::config::Settings;
 use crate::crypto::CryptoService;
 use crate::db::Db;
+use crate::repository::comptes::SqlxComptesRepository;
+use crate::repository::transactions::SqlxTransactionsRepository;
 use crate::services::jwt::JwtService;
 use std::sync::Arc;
 
@@ -9,11 +11,15 @@ pub struct AppState {
     pub db: Db,
     pub crypto: Arc<CryptoService>,
     pub jwt: Arc<JwtService>,
+    pub comptes: Arc<SqlxComptesRepository>,
+    pub transactions: Arc<SqlxTransactionsRepository>,
 }
 
 impl AppState {
     pub fn new(settings: &Settings, db: Db) -> Self {
         Self {
+            comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
+            transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
             db,
             crypto: Arc::new(
                 CryptoService::from_key(&settings.secrets.encryption_key)

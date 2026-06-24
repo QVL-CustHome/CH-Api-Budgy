@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub struct CompteId(pub Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProprietaireId(pub Uuid);
+pub struct ProprietaireId(pub String);
 
 #[derive(Debug, Clone)]
 pub struct Compte {
