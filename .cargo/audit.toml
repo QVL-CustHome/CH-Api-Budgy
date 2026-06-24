@@ -1,0 +1,11 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 — "Marvin Attack" : récupération de clé RSA par canal temporel (crate `rsa`).
+    # Tirée transitivement par sqlx (negociation d'authentification Postgres `sasl`/`auth`),
+    # jamais utilisée directement par ce service.
+    # Non exploitable dans notre contexte : la connexion Postgres est interne (réseau privé,
+    # TLS rustls), il n'y a pas d'attaquant capable de mesurer un canal temporel sur le
+    # handshake d'authentification de la base. Aucun correctif amont disponible à ce jour.
+    # À lever dès qu'une version corrigée de `rsa` est publiée et tirée par sqlx.
+    "RUSTSEC-2023-0071",
+]

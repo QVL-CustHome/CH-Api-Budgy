@@ -5,6 +5,9 @@ use axum::extract::FromRequestParts;
 use axum::http::header;
 use axum::http::request::Parts;
 
+const MAX_TOKEN_BYTES: usize = 8 * 1024;
+const REQUIRED_ROLE: &str = "budgy";
+
 pub struct BudgyUser(pub Claims);
 
 impl BudgyUser {
@@ -25,10 +28,16 @@ impl FromRequestParts<AppState> for BudgyUser {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let token = bearer_token(parts).ok_or(AppError::InvalidToken)?;
+        if token.len() > MAX_TOKEN_BYTES {
+            return Err(AppError::InvalidToken);
+        }
         let claims = state
             .jwt
             .validate(&token)
             .map_err(|_| AppError::InvalidToken)?;
+        if !claims.has_role(REQUIRED_ROLE) {
+            return Err(AppError::Forbidden("rôle budgy requis"));
+        }
         Ok(BudgyUser(claims))
     }
 }
