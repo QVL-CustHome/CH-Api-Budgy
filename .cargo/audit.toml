@@ -1,11 +1,20 @@
 [advisories]
 ignore = [
-    # RUSTSEC-2023-0071 — "Marvin Attack" : récupération de clé RSA par canal temporel (crate `rsa`).
-    # Tirée transitivement par sqlx (negociation d'authentification Postgres `sasl`/`auth`),
-    # jamais utilisée directement par ce service.
-    # Non exploitable dans notre contexte : la connexion Postgres est interne (réseau privé,
-    # TLS rustls), il n'y a pas d'attaquant capable de mesurer un canal temporel sur le
-    # handshake d'authentification de la base. Aucun correctif amont disponible à ce jour.
-    # À lever dès qu'une version corrigée de `rsa` est publiée et tirée par sqlx.
+    # RUSTSEC-2023-0071 — "Marvin Attack" : récupération de clé RSA par canal
+    # temporel (crate `rsa`, severity 5.9 medium, aucun correctif amont à ce jour).
+    #
+    # Chemin RÉEL : `rsa` est tirée UNIQUEMENT par `sqlx-mysql`, présent dans
+    # Cargo.lock parce que le crate parent `sqlx` déclare tous ses drivers, mais
+    # le driver MySQL N'EST PAS ACTIVÉ (Cargo.toml : sqlx en default-features=false,
+    # features = postgres only). `sqlx-mysql` / `rsa` ne sont donc jamais compilés
+    # (absents de `cargo tree`) ni atteignables à l'exécution.
+    #
+    # Non exploitable : Budgy n'effectue aucune opération RSA ; l'attaque Marvin
+    # exige l'observation par canal temporel d'opérations RSA qui ne s'exécutent
+    # jamais dans ce service.
+    #
+    # À RÉÉVALUER si : (a) un correctif `rsa` est publié et tiré par sqlx, ou
+    # (b) le driver MySQL est un jour activé — auquel cas la vuln redevient
+    # potentiellement atteignable et l'ignore doit être levé.
     "RUSTSEC-2023-0071",
 ]
