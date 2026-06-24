@@ -122,14 +122,19 @@ async fn migration_idempotente_ne_se_rejoue_pas() {
     let db = require_db!();
     db.migrate().await;
 
+    let avant: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+
     db::migrate_again(&db.pool).await;
 
-    let appliquees: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
+    let apres: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
         .fetch_one(&db.pool)
         .await
         .unwrap();
     assert_eq!(
-        appliquees, 1,
+        apres, avant,
         "une seconde migration ne doit pas rejouer ni ajouter de ligne"
     );
 
