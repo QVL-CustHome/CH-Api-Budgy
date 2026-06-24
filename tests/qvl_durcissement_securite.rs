@@ -1,6 +1,8 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use ch_api_budgy::crypto::CryptoService;
+use ch_api_budgy::repository::comptes::SqlxComptesRepository;
+use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;
 use ch_api_budgy::state::AppState;
@@ -30,6 +32,8 @@ fn test_state() -> AppState {
         .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
         .expect("pool lazy sans connexion");
     AppState {
+        comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
+        transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
         db,
         crypto: Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap()),
         jwt: Arc::new(jwt_service()),
