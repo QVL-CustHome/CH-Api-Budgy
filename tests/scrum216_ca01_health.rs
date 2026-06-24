@@ -3,6 +3,8 @@ mod common;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use ch_api_budgy::crypto::CryptoService;
+use ch_api_budgy::repository::comptes::SqlxComptesRepository;
+use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;
 use ch_api_budgy::state::AppState;
@@ -23,6 +25,16 @@ fn test_jwt() -> Arc<JwtService> {
         "ch-api-authenticator",
         "ch-api-budgy",
     ))
+}
+
+fn test_state(db: &DisposableDb) -> AppState {
+    AppState {
+        comptes: Arc::new(SqlxComptesRepository::new(db.pool.clone())),
+        transactions: Arc::new(SqlxTransactionsRepository::new(db.pool.clone())),
+        db: db.pool.clone(),
+        crypto: test_crypto(),
+        jwt: test_jwt(),
+    }
 }
 
 macro_rules! require_db {
@@ -60,15 +72,7 @@ async fn get(state: AppState, path: &str) -> (StatusCode, String) {
 #[tokio::test]
 async fn health_repond_200() {
     let db = require_db!();
-    let (status, _) = get(
-        AppState {
-            db: db.pool.clone(),
-            crypto: test_crypto(),
-            jwt: test_jwt(),
-        },
-        "/health",
-    )
-    .await;
+    let (status, _) = get(test_state(&db), "/health").await;
     assert_eq!(status, StatusCode::OK);
     db.destroy().await;
 }
@@ -76,15 +80,7 @@ async fn health_repond_200() {
 #[tokio::test]
 async fn health_renvoie_corps_json_exact() {
     let db = require_db!();
-    let (_, corps) = get(
-        AppState {
-            db: db.pool.clone(),
-            crypto: test_crypto(),
-            jwt: test_jwt(),
-        },
-        "/health",
-    )
-    .await;
+    let (_, corps) = get(test_state(&db), "/health").await;
     assert_eq!(corps, r#"{"status":"ok"}"#);
     db.destroy().await;
 }

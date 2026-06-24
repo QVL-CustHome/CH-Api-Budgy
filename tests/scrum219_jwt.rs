@@ -2,6 +2,8 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use ch_api_budgy::config::{self, ConfigError};
 use ch_api_budgy::crypto::CryptoService;
+use ch_api_budgy::repository::comptes::SqlxComptesRepository;
+use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::{Claims, JwtService, JwtValidationError};
 use ch_api_budgy::state::AppState;
@@ -217,6 +219,8 @@ fn test_state() -> AppState {
         .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
         .expect("pool lazy sans connexion pour la route /v1/me qui ne touche pas la base");
     AppState {
+        comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
+        transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
         db,
         crypto: Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap()),
         jwt: Arc::new(jwt_service()),
@@ -258,7 +262,9 @@ async fn ca02_route_me_sans_authorization_renvoie_401() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let body: Value = serde_json::from_str(&corps).unwrap();
-    assert_eq!(body["error"], json!("unauthorized"));
+    assert_eq!(body["code"], json!("unauthorized"));
+    assert!(body["message"].is_string());
+    assert!(body.get("error").is_none());
 }
 
 #[tokio::test]
