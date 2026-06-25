@@ -6,10 +6,11 @@ use ch_api_budgy::domain::balance::{BalanceType, NouvelleBalance};
 use ch_api_budgy::domain::bank_account::NouveauBankAccount;
 use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::consent::{ConsentStatus, NouveauConsent};
+use ch_api_budgy::domain::ports::ecriture::ResultatInsertion;
 use ch_api_budgy::domain::transaction_bancaire::{NouvelleTransactionBancaire, TransactionStatus};
 use ch_api_budgy::repository::balances::SqlxBalancesRepository;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsRepository;
-use ch_api_budgy::repository::bank_transactions::{InsertOutcome, SqlxBankTransactionsRepository};
+use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsRepository;
 use chrono::{TimeZone, Utc};
 use common::DisposableDb;
@@ -244,8 +245,8 @@ async fn ac01_transaction_modelisee_avec_statut_booked_et_pending() {
             .expect("insertion transaction");
 
         let id = match outcome {
-            InsertOutcome::Inserted(id) => id,
-            InsertOutcome::Duplicate => panic!("première insertion ne doit pas être un doublon"),
+            ResultatInsertion::Inseree(id) => id,
+            ResultatInsertion::Doublon => panic!("première insertion ne doit pas être un doublon"),
         };
 
         let relu = repo.fetch(&crypto, &id).await.expect("lecture transaction");
@@ -280,7 +281,7 @@ async fn ac02_dedup_key_rejette_la_transaction_dupliquee() {
         .insert(&crypto, nouvelle())
         .await
         .expect("première insertion");
-    assert!(matches!(premier, InsertOutcome::Inserted(_)));
+    assert!(matches!(premier, ResultatInsertion::Inseree(_)));
 
     let second = repo
         .insert(&crypto, nouvelle())
@@ -288,7 +289,7 @@ async fn ac02_dedup_key_rejette_la_transaction_dupliquee() {
         .expect("seconde insertion");
     assert_eq!(
         second,
-        InsertOutcome::Duplicate,
+        ResultatInsertion::Doublon,
         "la transaction dupliquée doit être ignorée via dedup_key"
     );
 
@@ -329,8 +330,8 @@ async fn ac03_colonnes_sensibles_stockees_en_bytea_chiffre() {
         .await
         .expect("insertion transaction");
     let tx_id = match outcome {
-        InsertOutcome::Inserted(id) => id.0,
-        InsertOutcome::Duplicate => panic!("insertion attendue"),
+        ResultatInsertion::Inseree(id) => id.0,
+        ResultatInsertion::Doublon => panic!("insertion attendue"),
     };
 
     let external_ref = raw_bytea(&db.pool, "consent", "external_ref", consent_id).await;
@@ -402,8 +403,8 @@ async fn ac03_cycle_chiffrement_dechiffrement_restitue_les_donnees() {
         .await
         .expect("insertion transaction");
     let tx_id = match outcome {
-        InsertOutcome::Inserted(id) => id,
-        InsertOutcome::Duplicate => panic!("insertion attendue"),
+        ResultatInsertion::Inseree(id) => id,
+        ResultatInsertion::Doublon => panic!("insertion attendue"),
     };
 
     let tx = tx_repo
@@ -459,8 +460,8 @@ async fn ac04_key_version_presente_sur_les_tables_chiffrees() {
         .await
         .expect("insertion transaction")
     {
-        InsertOutcome::Inserted(id) => id.0,
-        InsertOutcome::Duplicate => panic!("insertion attendue"),
+        ResultatInsertion::Inseree(id) => id.0,
+        ResultatInsertion::Doublon => panic!("insertion attendue"),
     };
 
     assert_eq!(key_version(&db.pool, "consent", consent_id).await, 1);

@@ -1,5 +1,6 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source};
 use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::repository::comptes::SqlxComptesRepository;
 use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
@@ -34,6 +35,7 @@ fn test_state() -> AppState {
     AppState {
         comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
         transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
+        bank_source: construire_source(SourceBancaire::Mock),
         db,
         crypto: Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap()),
         jwt: Arc::new(jwt_service()),

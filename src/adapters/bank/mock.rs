@@ -1,0 +1,177 @@
+use crate::adapters::bank::determinisme::{horodatage_ancre, uuid_depuis};
+use crate::domain::balance::{Balance, BalanceId, BalanceType};
+use crate::domain::bank_account::{BankAccount, BankAccountId};
+use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
+use crate::domain::ports::bank_data_source::{
+    BankDataSource, BankDataSourceError, DemandeConsentement,
+};
+use crate::domain::transaction_bancaire::{
+    TransactionBancaire, TransactionBancaireId, TransactionStatus,
+};
+use async_trait::async_trait;
+use chrono::{Duration, NaiveDate};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+const DEVISE: &str = "EUR";
+
+#[derive(Default)]
+pub struct MockBankDataSource {
+    rejeux_par_compte: Mutex<HashMap<String, u32>>,
+}
+
+impl MockBankDataSource {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn lot_transactions(compte: &BankAccount, rejeu: u32) -> Vec<TransactionBancaire> {
+        let cree_le = horodatage_ancre();
+        let booking = horodatage_ancre().date_naive();
+
+        let salaire = TransactionBancaire {
+            id: TransactionBancaireId(uuid_depuis(&format!("{}-tx-salaire", compte.id.0))),
+            bank_account: compte.id.clone(),
+            external_transaction_id: format!("{}-salaire", compte.external_account_id),
+            status: TransactionStatus::Booked,
+            label: "VIREMENT SALAIRE".to_string(),
+            amount_cents: 245_000,
+            currency: DEVISE.to_string(),
+            booking_date: Some(booking - Duration::days(3)),
+            value_date: Some(booking - Duration::days(3)),
+            created_at: cree_le,
+        };
+
+        let abonnement = TransactionBancaire {
+            id: TransactionBancaireId(uuid_depuis(&format!("{}-tx-abonnement", compte.id.0))),
+            bank_account: compte.id.clone(),
+            external_transaction_id: format!("{}-abonnement", compte.external_account_id),
+            status: TransactionStatus::Booked,
+            label: "PRELEVEMENT ABONNEMENT".to_string(),
+            amount_cents: -1_299,
+            currency: DEVISE.to_string(),
+            booking_date: Some(booking - Duration::days(1)),
+            value_date: Some(booking - Duration::days(1)),
+            created_at: cree_le,
+        };
+
+        let statut_evolutif = if rejeu == 0 {
+            TransactionStatus::Pending
+        } else {
+            TransactionStatus::Booked
+        };
+        let date_evolutive = if rejeu == 0 { None } else { Some(booking) };
+
+        let achat = TransactionBancaire {
+            id: TransactionBancaireId(uuid_depuis(&format!("{}-tx-achat", compte.id.0))),
+            bank_account: compte.id.clone(),
+            external_transaction_id: format!("{}-achat", compte.external_account_id),
+            status: statut_evolutif,
+            label: "CARTE ACHAT COMMERCE".to_string(),
+            amount_cents: -4_590,
+            currency: DEVISE.to_string(),
+            booking_date: date_evolutive,
+            value_date: date_evolutive,
+            created_at: cree_le,
+        };
+
+        vec![salaire, abonnement, achat]
+    }
+}
+
+#[async_trait]
+impl BankDataSource for MockBankDataSource {
+    async fn initier_consentement(
+        &self,
+        demande: DemandeConsentement,
+    ) -> Result<Consent, BankDataSourceError> {
+        let horodatage = horodatage_ancre();
+        Ok(Consent {
+            id: ConsentId(uuid_depuis(&format!(
+                "consent-{}-{}",
+                demande.proprietaire.0, demande.etablissement
+            ))),
+            proprietaire: demande.proprietaire,
+            external_ref: format!("mock-consent-{}", demande.etablissement),
+            status: ConsentStatus::Active,
+            expires_at: Some(horodatage + Duration::days(90)),
+            created_at: horodatage,
+            updated_at: horodatage,
+        })
+    }
+
+    async fn lister_comptes(
+        &self,
+        consent: &Consent,
+    ) -> Result<Vec<BankAccount>, BankDataSourceError> {
+        let horodatage = horodatage_ancre();
+        let proprietaire = consent.proprietaire.clone();
+        let comptes = ["courant", "epargne"]
+            .into_iter()
+            .map(|nature| {
+                let external = format!("mock-{}-{nature}", consent.external_ref);
+                BankAccount {
+                    id: BankAccountId(uuid_depuis(&format!("account-{external}"))),
+                    proprietaire: proprietaire.clone(),
+                    consent: consent.id.clone(),
+                    external_account_id: external,
+                    iban_masked: "************0189".to_string(),
+                    currency: DEVISE.to_string(),
+                    next_sync_at: Some(horodatage + Duration::days(1)),
+                    sync_count_today: 0,
+                    created_at: horodatage,
+                    updated_at: horodatage,
+                }
+            })
+            .collect();
+        Ok(comptes)
+    }
+
+    async fn solde(
+        &self,
+        _consent: &Consent,
+        compte: &BankAccount,
+    ) -> Result<Vec<Balance>, BankDataSourceError> {
+        let horodatage = horodatage_ancre();
+        Ok(vec![
+            Balance {
+                id: BalanceId(uuid_depuis(&format!("balance-booked-{}", compte.id.0))),
+                bank_account: compte.id.clone(),
+                balance_type: BalanceType::Booked,
+                amount_cents: 312_711,
+                currency: DEVISE.to_string(),
+                reference_date: horodatage,
+                created_at: horodatage,
+            },
+            Balance {
+                id: BalanceId(uuid_depuis(&format!("balance-available-{}", compte.id.0))),
+                bank_account: compte.id.clone(),
+                balance_type: BalanceType::Available,
+                amount_cents: 308_121,
+                currency: DEVISE.to_string(),
+                reference_date: horodatage,
+                created_at: horodatage,
+            },
+        ])
+    }
+
+    async fn lister_transactions(
+        &self,
+        _consent: &Consent,
+        compte: &BankAccount,
+        _depuis: NaiveDate,
+    ) -> Result<Vec<TransactionBancaire>, BankDataSourceError> {
+        let rejeu = {
+            let mut compteurs = self
+                .rejeux_par_compte
+                .lock()
+                .map_err(|_| BankDataSourceError::Technique("état du mock corrompu".to_string()))?;
+            let cle = compte.external_account_id.clone();
+            let courant = compteurs.entry(cle).or_insert(0);
+            let valeur = *courant;
+            *courant += 1;
+            valeur
+        };
+        Ok(Self::lot_transactions(compte, rejeu))
+    }
+}

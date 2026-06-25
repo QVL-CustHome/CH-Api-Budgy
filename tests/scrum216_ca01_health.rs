@@ -2,6 +2,7 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source};
 use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::repository::comptes::SqlxComptesRepository;
 use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
@@ -31,6 +32,7 @@ fn test_state(db: &DisposableDb) -> AppState {
     AppState {
         comptes: Arc::new(SqlxComptesRepository::new(db.pool.clone())),
         transactions: Arc::new(SqlxTransactionsRepository::new(db.pool.clone())),
+        bank_source: construire_source(SourceBancaire::Mock),
         db: db.pool.clone(),
         crypto: test_crypto(),
         jwt: test_jwt(),
