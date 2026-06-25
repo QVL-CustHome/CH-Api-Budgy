@@ -1,6 +1,23 @@
 use crate::crypto::{CryptoError, CryptoService};
+use crate::domain::ports::ecriture::EcritureError;
 
 pub const KEY_VERSION: i16 = 1;
+
+pub fn vers_ecriture_error(erreur: ChiffrementError) -> EcritureError {
+    match erreur {
+        ChiffrementError::Database(e) => EcritureError::Acces(e.to_string()),
+        ChiffrementError::Crypto(e) => EcritureError::Protection(e.to_string()),
+        ChiffrementError::InvalidUtf8 => {
+            EcritureError::Protection("champ déchiffré non valide en UTF-8".to_string())
+        }
+        ChiffrementError::InvalidAmount => {
+            EcritureError::Protection("montant déchiffré illisible".to_string())
+        }
+        ChiffrementError::UnknownEnum(v) => {
+            EcritureError::Acces(format!("valeur de domaine inconnue : {v}"))
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChiffrementError {

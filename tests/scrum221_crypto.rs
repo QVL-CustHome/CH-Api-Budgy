@@ -51,6 +51,7 @@ fn ca06_debug_des_secrets_ne_revele_pas_la_cle() {
                 log_level: "INFO".to_string(),
             },
             token: config::TokenConfig::default(),
+            bank: config::BankConfig::default(),
         },
         secrets: config::Secrets {
             database_url: "postgres://user:motdepasse@localhost/db".to_string(),
