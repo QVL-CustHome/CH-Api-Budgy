@@ -16,7 +16,9 @@ pub use budget::Budget;
 pub use categorie::Categorie;
 pub use compte::Compte;
 pub use consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
-pub use ports::bank_data_source::BankDataSource;
+pub use ports::bank_data_source::{
+    BankDataSource, ConsentementInitie, DemandeConsentement, ReponseAutorisation,
+};
 pub use previsionnel::Previsionnel;
 pub use regle_categorisation::{ChampCible, OperateurCorrespondance, RegleCategorisation};
 pub use transaction::{SensTransaction, Transaction};

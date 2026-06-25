@@ -2,8 +2,10 @@ use crate::adapters::bank::determinisme::{horodatage_ancre, uuid_depuis};
 use crate::domain::balance::{Balance, BalanceId, BalanceType};
 use crate::domain::bank_account::{BankAccount, BankAccountId};
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
+use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::bank_data_source::{
-    BankDataSource, BankDataSourceError, DemandeConsentement,
+    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement,
+    ReponseAutorisation,
 };
 use crate::domain::transaction_bancaire::{
     TransactionBancaire, TransactionBancaireId, TransactionStatus,
@@ -84,15 +86,40 @@ impl BankDataSource for MockBankDataSource {
     async fn initier_consentement(
         &self,
         demande: DemandeConsentement,
-    ) -> Result<Consent, BankDataSourceError> {
+    ) -> Result<ConsentementInitie, BankDataSourceError> {
         let horodatage = horodatage_ancre();
-        Ok(Consent {
+        let consent = Consent {
             id: ConsentId(uuid_depuis(&format!(
                 "consent-{}-{}",
                 demande.proprietaire.0, demande.etablissement
             ))),
             proprietaire: demande.proprietaire,
-            external_ref: format!("mock-consent-{}", demande.etablissement),
+            external_ref: format!("mock-auth-{}", demande.etablissement),
+            status: ConsentStatus::Pending,
+            expires_at: Some(horodatage + Duration::days(90)),
+            created_at: horodatage,
+            updated_at: horodatage,
+        };
+        let url_autorisation = format!("{}?state={}", demande.url_retour, consent.id.0);
+        Ok(ConsentementInitie {
+            consent,
+            url_autorisation,
+        })
+    }
+
+    async fn completer_consentement(
+        &self,
+        proprietaire: &ProprietaireId,
+        reponse: ReponseAutorisation,
+    ) -> Result<Consent, BankDataSourceError> {
+        let horodatage = horodatage_ancre();
+        let consent_id = uuid::Uuid::parse_str(&reponse.reference_autorisation)
+            .map(ConsentId)
+            .map_err(|_| BankDataSourceError::ConsentementInvalide)?;
+        Ok(Consent {
+            id: consent_id,
+            proprietaire: proprietaire.clone(),
+            external_ref: format!("mock-session-{}", reponse.reference_autorisation),
             status: ConsentStatus::Active,
             expires_at: Some(horodatage + Duration::days(90)),
             created_at: horodatage,
@@ -173,5 +200,16 @@ impl BankDataSource for MockBankDataSource {
             valeur
         };
         Ok(Self::lot_transactions(compte, rejeu))
+    }
+
+    async fn revoquer_consentement(
+        &self,
+        consent: &Consent,
+    ) -> Result<Consent, BankDataSourceError> {
+        Ok(Consent {
+            status: ConsentStatus::Revoked,
+            updated_at: horodatage_ancre(),
+            ..consent.clone()
+        })
     }
 }
