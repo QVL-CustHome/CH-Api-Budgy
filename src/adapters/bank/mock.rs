@@ -4,7 +4,7 @@ use crate::domain::bank_account::{BankAccount, BankAccountId};
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::bank_data_source::{
-    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement,
+    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
     ReponseAutorisation,
 };
 use crate::domain::transaction_bancaire::{
@@ -83,16 +83,28 @@ impl MockBankDataSource {
 
 #[async_trait]
 impl BankDataSource for MockBankDataSource {
+    async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError> {
+        Ok(vec![
+            Etablissement {
+                id: "mock-banque-demo|FR".to_string(),
+                nom: "Banque Démo".to_string(),
+                pays: "FR".to_string(),
+            },
+            Etablissement {
+                id: "mock-banque-epargne|FR".to_string(),
+                nom: "Banque Épargne".to_string(),
+                pays: "FR".to_string(),
+            },
+        ])
+    }
+
     async fn initier_consentement(
         &self,
         demande: DemandeConsentement,
     ) -> Result<ConsentementInitie, BankDataSourceError> {
         let horodatage = horodatage_ancre();
         let consent = Consent {
-            id: ConsentId(uuid_depuis(&format!(
-                "consent-{}-{}",
-                demande.proprietaire.0, demande.etablissement
-            ))),
+            id: demande.consent_id,
             proprietaire: demande.proprietaire,
             external_ref: format!("mock-auth-{}", demande.etablissement),
             status: ConsentStatus::Pending,
@@ -100,7 +112,10 @@ impl BankDataSource for MockBankDataSource {
             created_at: horodatage,
             updated_at: horodatage,
         };
-        let url_autorisation = format!("{}?state={}", demande.url_retour, consent.id.0);
+        let url_autorisation = format!(
+            "https://mock.banque.example/authorize?redirect={}&state={}",
+            demande.url_retour, consent.id.0
+        );
         Ok(ConsentementInitie {
             consent,
             url_autorisation,

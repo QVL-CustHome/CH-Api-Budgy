@@ -60,12 +60,24 @@ impl Default for RelayConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BankConfig {
     #[serde(default)]
     pub source: SourceBancaire,
     #[serde(default)]
     pub enable_banking: EnableBankingConfig,
+    #[serde(default = "default_bank_callback_url")]
+    pub callback_url: String,
+}
+
+impl Default for BankConfig {
+    fn default() -> Self {
+        Self {
+            source: SourceBancaire::default(),
+            enable_banking: EnableBankingConfig::default(),
+            callback_url: default_bank_callback_url(),
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -172,6 +184,10 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         config.bank.source = source;
     }
 
+    if let Some(callback_url) = optional("BANK_CALLBACK_URL") {
+        config.bank.callback_url = callback_url;
+    }
+
     appliquer_overrides_enable_banking(&mut config.bank.enable_banking);
     appliquer_overrides_relay(&mut config.relay);
 
@@ -275,6 +291,10 @@ fn default_relay_topic_user_deleted() -> String {
 
 fn default_enable_banking_base_url() -> String {
     "https://api.enablebanking.com".to_string()
+}
+
+fn default_bank_callback_url() -> String {
+    "https://budgy.custhome.app/banque/callback".to_string()
 }
 
 fn default_log_level() -> String {

@@ -1,9 +1,12 @@
 use crate::crypto::CryptoService;
 use crate::db::Db;
-use crate::domain::bank_account::{BankAccount, BankAccountId, NouveauBankAccount, masquer_iban};
+use crate::domain::bank_account::{
+    BankAccount, BankAccountId, NouveauBankAccount, dedup_key, masquer_iban,
+};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::ConsentId;
 use crate::domain::ports::ecriture::{BankAccountsWriteRepository, EcritureError};
+use crate::domain::ports::lecture::{BankAccountsReadRepository, LectureError};
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
 };
@@ -40,11 +43,14 @@ impl SqlxBankAccountsRepository {
         )?;
         let iban_encrypted = chiffrer_texte(crypto, owner, TABLE, FIELD_IBAN, &nouveau.iban)?;
         let iban_masked = masquer_iban(&nouveau.iban);
+        let dedup = dedup_key(&nouveau.consent, &nouveau.external_account_id);
 
-        let id: Uuid = sqlx::query_scalar(
+        let id: Option<Uuid> = sqlx::query_scalar(
             "INSERT INTO budgy.bank_account \
-             (owner_id, consent_id, external_account_id, iban_encrypted, iban_masked, currency, next_sync_at, sync_count_today, key_version) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8) RETURNING id",
+             (owner_id, consent_id, external_account_id, iban_encrypted, iban_masked, currency, next_sync_at, sync_count_today, key_version, dedup_key) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9) \
+             ON CONFLICT ON CONSTRAINT bank_account_consent_dedup_unique DO NOTHING \
+             RETURNING id",
         )
         .bind(owner)
         .bind(nouveau.consent.0)
@@ -54,6 +60,26 @@ impl SqlxBankAccountsRepository {
         .bind(&nouveau.currency)
         .bind(nouveau.next_sync_at)
         .bind(KEY_VERSION)
+        .bind(&dedup)
+        .fetch_optional(&self.db)
+        .await?;
+
+        match id {
+            Some(id) => Ok(BankAccountId(id)),
+            None => self.fetch_id_par_dedup(&nouveau.consent.0, &dedup).await,
+        }
+    }
+
+    async fn fetch_id_par_dedup(
+        &self,
+        consent_id: &Uuid,
+        dedup: &str,
+    ) -> Result<BankAccountId, ChiffrementError> {
+        let id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM budgy.bank_account WHERE consent_id = $1 AND dedup_key = $2",
+        )
+        .bind(consent_id)
+        .bind(dedup)
         .fetch_one(&self.db)
         .await?;
 
@@ -78,6 +104,28 @@ impl SqlxBankAccountsRepository {
         };
 
         Ok(Some(into_bank_account(crypto, row)?))
+    }
+
+    pub async fn lister_par_consent(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        consent: &ConsentId,
+    ) -> Result<Vec<BankAccount>, ChiffrementError> {
+        let rows = sqlx::query_as::<_, BankAccountRow>(
+            "SELECT id, owner_id, consent_id, external_account_id, iban_masked, currency, \
+             next_sync_at, sync_count_today, created_at, updated_at \
+             FROM budgy.bank_account WHERE owner_id = $1 AND consent_id = $2 \
+             ORDER BY created_at ASC",
+        )
+        .bind(&proprietaire.0)
+        .bind(consent.0)
+        .fetch_all(&self.db)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| into_bank_account(crypto, row))
+            .collect()
     }
 
     pub async fn supprimer_par_proprietaire(
@@ -126,6 +174,19 @@ impl BankAccountsWriteRepository for SqlxBankAccountsWriteAdapter {
             .supprimer_par_proprietaire(proprietaire)
             .await
             .map_err(vers_ecriture_error)
+    }
+}
+
+impl BankAccountsReadRepository for SqlxBankAccountsWriteAdapter {
+    async fn lister_par_consent(
+        &self,
+        proprietaire: &ProprietaireId,
+        consent: &ConsentId,
+    ) -> Result<Vec<BankAccount>, LectureError> {
+        self.repo
+            .lister_par_consent(&self.crypto, proprietaire, consent)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
     }
 }
 

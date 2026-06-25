@@ -68,6 +68,7 @@ fn compte_actif() -> ch_api_budgy::domain::bank_account::BankAccount {
 
 fn demande() -> DemandeConsentement {
     DemandeConsentement {
+        consent_id: ConsentId(uuid::Uuid::new_v4()),
         proprietaire: ProprietaireId(OWNER.to_string()),
         etablissement: "Banque Demo".to_string(),
         url_retour: "https://budgy.custhome.app/banque/retour".to_string(),

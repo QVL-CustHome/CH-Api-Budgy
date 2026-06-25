@@ -7,7 +7,7 @@ use crate::domain::bank_account::BankAccount;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::Consent;
 use crate::domain::ports::bank_data_source::{
-    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement,
+    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
     ReponseAutorisation,
 };
 use crate::domain::transaction_bancaire::TransactionBancaire;
@@ -63,6 +63,10 @@ fn charger_pem(config: &EnableBankingConfig) -> Option<Vec<u8>> {
 
 #[async_trait]
 impl<T: TransportHttp> BankDataSource for EnableBankingBankDataSource<T> {
+    async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError> {
+        self.client()?.lister_etablissements().await
+    }
+
     async fn initier_consentement(
         &self,
         demande: DemandeConsentement,

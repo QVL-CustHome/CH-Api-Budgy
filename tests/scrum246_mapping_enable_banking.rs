@@ -69,7 +69,9 @@ async fn initier_consentement_renvoie_url_de_redirection_et_consent_pending() {
     let reponse = r#"{"url":"https://banque.example/authorize?id=abc","authorization_id":"auth-123"}"#;
     let (source, transport) = source(vec![EchangeSimule::ok(reponse)]);
 
+    let consent_id = ConsentId(uuid::Uuid::new_v4());
     let demande = DemandeConsentement {
+        consent_id: consent_id.clone(),
         proprietaire: ProprietaireId(OWNER.to_string()),
         etablissement: "Banque Demo".to_string(),
         url_retour: "https://budgy.custhome.app/banque/retour".to_string(),
@@ -80,7 +82,11 @@ async fn initier_consentement_renvoie_url_de_redirection_et_consent_pending() {
         .await
         .expect("initiation du consentement");
 
-    assert_eq!(initie.url_autorisation, "https://banque.example/authorize?id=abc");
+    assert_eq!(initie.consent.id, consent_id);
+    assert!(initie.url_autorisation.starts_with("https://banque.example/authorize?id=abc"));
+    assert!(initie
+        .url_autorisation
+        .contains(&format!("state={}", consent_id.0)));
     assert_eq!(initie.consent.status, ConsentStatus::Pending);
     assert_eq!(initie.consent.external_ref, "auth-123");
 
@@ -89,6 +95,8 @@ async fn initier_consentement_renvoie_url_de_redirection_et_consent_pending() {
     assert_eq!(requetes[0].methode, MethodeHttp::Post);
     assert_eq!(requetes[0].chemin, "/auth");
     assert!(!requetes[0].jeton.is_empty());
+    let corps = requetes[0].corps_json.as_deref().unwrap();
+    assert!(corps.contains(&consent_id.0.to_string()));
 }
 
 #[tokio::test]

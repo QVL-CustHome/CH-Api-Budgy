@@ -11,6 +11,7 @@ pub enum ConsentStatus {
     Active,
     Expired,
     Revoked,
+    Failed,
 }
 
 impl ConsentStatus {
@@ -20,6 +21,7 @@ impl ConsentStatus {
             ConsentStatus::Active => "active",
             ConsentStatus::Expired => "expired",
             ConsentStatus::Revoked => "revoked",
+            ConsentStatus::Failed => "failed",
         }
     }
 
@@ -29,6 +31,7 @@ impl ConsentStatus {
             "active" => Some(ConsentStatus::Active),
             "expired" => Some(ConsentStatus::Expired),
             "revoked" => Some(ConsentStatus::Revoked),
+            "failed" => Some(ConsentStatus::Failed),
             _ => None,
         }
     }
@@ -50,5 +53,21 @@ pub struct NouveauConsent {
     pub proprietaire: ProprietaireId,
     pub external_ref: String,
     pub status: ConsentStatus,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NouveauConsentInitie {
+    pub id: ConsentId,
+    pub proprietaire: ProprietaireId,
+    pub external_ref: String,
+    pub status: ConsentStatus,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MiseAJourConsent {
+    pub status: ConsentStatus,
+    pub external_ref: String,
     pub expires_at: Option<DateTime<Utc>>,
 }
