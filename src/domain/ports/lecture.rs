@@ -1,4 +1,5 @@
-use crate::domain::compte::{Compte, CompteId};
+use crate::domain::compte::{Compte, CompteId, ProprietaireId};
+use crate::domain::consent::Consent;
 use crate::domain::transaction::Transaction;
 use chrono::NaiveDate;
 use std::future::Future;
@@ -57,4 +58,11 @@ pub trait TransactionsReadRepository: Send + Sync {
         &self,
         query: ListeTransactionsQuery,
     ) -> impl Future<Output = Result<LectureResultat<Transaction>, LectureError>> + Send;
+}
+
+pub trait ConsentsReadRepository: Send + Sync {
+    fn lister_actifs_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<Consent>, LectureError>> + Send;
 }

@@ -52,11 +52,13 @@ fn ca06_debug_des_secrets_ne_revele_pas_la_cle() {
             },
             token: config::TokenConfig::default(),
             bank: config::BankConfig::default(),
+            relay: config::RelayConfig::default(),
         },
         secrets: config::Secrets {
             database_url: "postgres://user:motdepasse@localhost/db".to_string(),
             encryption_key: TEST_KEY.to_vec(),
             jwt_secret: "secret-de-test-jwt-suffisamment-long-32o!".to_string(),
+            relay_token: None,
         },
     };
 
