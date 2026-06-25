@@ -23,6 +23,7 @@ chacha20poly1305 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rumqttc = { version = "0.24", default-features = false, features = ["use-rustls"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
