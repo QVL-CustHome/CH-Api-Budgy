@@ -1,7 +1,8 @@
 use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source};
+use ch_api_budgy::config::EnableBankingConfig;
 use ch_api_budgy::config;
 use ch_api_budgy::domain::compte::ProprietaireId;
-use ch_api_budgy::domain::ports::bank_data_source::DemandeConsentement;
+use ch_api_budgy::domain::ports::bank_data_source::{BankDataSourceError, DemandeConsentement};
 use std::sync::Mutex;
 
 const TEST_KEY_B64: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -82,11 +83,11 @@ fn la_section_bank_mock_de_la_config_selectionne_le_mock() {
 }
 
 #[test]
-fn la_section_bank_gocardless_de_la_config_selectionne_le_reel() {
+fn la_section_bank_enablebanking_de_la_config_selectionne_le_reel() {
     let _guard = ENV_LOCK.lock().unwrap();
-    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"gocardless\"\n", None);
+    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"enablebanking\"\n", None);
 
-    assert_eq!(scenario.source_chargee(), SourceBancaire::Gocardless);
+    assert_eq!(scenario.source_chargee(), SourceBancaire::EnableBanking);
 }
 
 #[test]
@@ -100,15 +101,15 @@ fn sans_section_bank_la_source_par_defaut_est_le_mock() {
 #[test]
 fn la_variable_env_bank_source_remplace_la_section_de_config() {
     let _guard = ENV_LOCK.lock().unwrap();
-    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"mock\"\n", Some("gocardless"));
+    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"mock\"\n", Some("enablebanking"));
 
-    assert_eq!(scenario.source_chargee(), SourceBancaire::Gocardless);
+    assert_eq!(scenario.source_chargee(), SourceBancaire::EnableBanking);
 }
 
 #[test]
 fn la_variable_env_bank_source_force_le_mock_malgre_la_config_reelle() {
     let _guard = ENV_LOCK.lock().unwrap();
-    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"gocardless\"\n", Some("mock"));
+    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"enablebanking\"\n", Some("mock"));
 
     assert_eq!(scenario.source_chargee(), SourceBancaire::Mock);
 }
@@ -116,21 +117,24 @@ fn la_variable_env_bank_source_force_le_mock_malgre_la_config_reelle() {
 #[test]
 fn une_valeur_bank_source_invalide_est_ignoree_et_conserve_la_config() {
     let _guard = ENV_LOCK.lock().unwrap();
-    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"gocardless\"\n", Some("revolut"));
+    let scenario = ScenarioConfig::nouveau("[bank]\nsource = \"enablebanking\"\n", Some("revolut"));
 
-    assert_eq!(scenario.source_chargee(), SourceBancaire::Gocardless);
+    assert_eq!(scenario.source_chargee(), SourceBancaire::EnableBanking);
 }
 
 #[tokio::test]
-async fn la_source_reelle_selectionnee_est_un_stub_non_branche() {
-    let source = construire_source(SourceBancaire::Gocardless);
+async fn la_source_reelle_sans_credentials_refuse_proprement() {
+    let source = construire_source(SourceBancaire::EnableBanking, &EnableBankingConfig::default());
     let demande = DemandeConsentement {
         proprietaire: ProprietaireId("owner-qa-245".to_string()),
         etablissement: "banque-demo".to_string(),
         url_retour: "https://budgy.custhome.app/retour".to_string(),
     };
 
-    let resultat = tokio::spawn(async move { source.initier_consentement(demande).await }).await;
+    let resultat = source.initier_consentement(demande).await;
 
-    assert!(resultat.is_err());
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 }
