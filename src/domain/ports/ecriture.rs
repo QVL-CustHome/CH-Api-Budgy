@@ -1,5 +1,5 @@
 use crate::domain::balance::{BalanceId, NouvelleBalance};
-use crate::domain::bank_account::{BankAccountId, NouveauBankAccount};
+use crate::domain::bank_account::{BankAccountId, NouveauBankAccount, PlanificationSynchro};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{
     ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
@@ -76,4 +76,21 @@ pub trait BankTransactionsWriteRepository: Send + Sync {
         &self,
         nouvelle: NouvelleTransactionBancaire,
     ) -> impl Future<Output = Result<ResultatInsertion<TransactionBancaireId>, EcritureError>> + Send;
+}
+
+pub trait PlanificationSynchroWriteRepository: Send + Sync {
+    fn reserver_creneau(
+        &self,
+        compte: &BankAccountId,
+        plan: PlanificationSynchro,
+        quota_journalier: i32,
+    ) -> impl Future<Output = Result<bool, EcritureError>> + Send;
+}
+
+pub trait ConsentsStatutWriteRepository: Send + Sync {
+    fn marquer_statut(
+        &self,
+        consent: &ConsentId,
+        statut: ConsentStatus,
+    ) -> impl Future<Output = Result<(), EcritureError>> + Send;
 }

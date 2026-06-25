@@ -48,12 +48,16 @@ impl SqlxBankTransactionsRepository {
         let amount = chiffrer_montant(crypto, &owner, TABLE, FIELD_AMOUNT, nouvelle.amount_cents)?;
         let dedup = dedup_key(&nouvelle.bank_account, &nouvelle.external_transaction_id);
 
-        let id: Option<Uuid> = sqlx::query_scalar(
+        let resultat: Option<(Uuid, bool)> = sqlx::query_as(
             "INSERT INTO budgy.bank_transaction \
              (bank_account_id, external_transaction_id, dedup_key, status, label, amount_cents, currency, booking_date, value_date, key_version) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-             ON CONFLICT ON CONSTRAINT bank_transaction_dedup_key_unique DO NOTHING \
-             RETURNING id",
+             ON CONFLICT ON CONSTRAINT bank_transaction_dedup_key_unique DO UPDATE SET \
+             status = EXCLUDED.status, \
+             booking_date = EXCLUDED.booking_date, \
+             value_date = EXCLUDED.value_date \
+             WHERE budgy.bank_transaction.status = $11 AND EXCLUDED.status = $12 \
+             RETURNING id, (xmax = 0) AS inseree",
         )
         .bind(nouvelle.bank_account.0)
         .bind(external_transaction_id)
@@ -65,12 +69,14 @@ impl SqlxBankTransactionsRepository {
         .bind(nouvelle.booking_date)
         .bind(nouvelle.value_date)
         .bind(KEY_VERSION)
+        .bind(TransactionStatus::Pending.as_str())
+        .bind(TransactionStatus::Booked.as_str())
         .fetch_optional(&self.db)
         .await?;
 
-        Ok(match id {
-            Some(id) => ResultatInsertion::Inseree(TransactionBancaireId(id)),
-            None => ResultatInsertion::Doublon,
+        Ok(match resultat {
+            Some((id, true)) => ResultatInsertion::Inseree(TransactionBancaireId(id)),
+            _ => ResultatInsertion::Doublon,
         })
     }
 

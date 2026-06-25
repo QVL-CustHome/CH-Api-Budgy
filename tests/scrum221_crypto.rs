@@ -53,6 +53,7 @@ fn ca06_debug_des_secrets_ne_revele_pas_la_cle() {
             token: config::TokenConfig::default(),
             bank: config::BankConfig::default(),
             relay: config::RelayConfig::default(),
+            worker_synchro: config::WorkerSynchroSettings::default(),
         },
         secrets: config::Secrets {
             database_url: "postgres://user:motdepasse@localhost/db".to_string(),
