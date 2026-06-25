@@ -5,9 +5,11 @@ pub mod categorie;
 pub mod compte;
 pub mod consent;
 pub mod effacement;
+pub mod horloge;
 pub mod ports;
 pub mod previsionnel;
 pub mod regle_categorisation;
+pub mod synchro;
 pub mod transaction;
 pub mod transaction_bancaire;
 
