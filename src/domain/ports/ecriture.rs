@@ -1,5 +1,6 @@
 use crate::domain::balance::{BalanceId, NouvelleBalance};
 use crate::domain::bank_account::{BankAccountId, NouveauBankAccount};
+use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{ConsentId, NouveauConsent};
 use crate::domain::transaction_bancaire::{NouvelleTransactionBancaire, TransactionBancaireId};
 use std::future::Future;
@@ -23,6 +24,11 @@ pub trait ConsentsWriteRepository: Send + Sync {
         &self,
         nouveau: NouveauConsent,
     ) -> impl Future<Output = Result<ConsentId, EcritureError>> + Send;
+
+    fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<u64, EcritureError>> + Send;
 }
 
 pub trait BankAccountsWriteRepository: Send + Sync {
@@ -30,6 +36,11 @@ pub trait BankAccountsWriteRepository: Send + Sync {
         &self,
         nouveau: NouveauBankAccount,
     ) -> impl Future<Output = Result<BankAccountId, EcritureError>> + Send;
+
+    fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<u64, EcritureError>> + Send;
 }
 
 pub trait BalancesWriteRepository: Send + Sync {

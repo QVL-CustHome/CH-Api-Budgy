@@ -33,6 +33,31 @@ pub struct Config {
     pub token: TokenConfig,
     #[serde(default)]
     pub bank: BankConfig,
+    #[serde(default)]
+    pub relay: RelayConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RelayConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_relay_url")]
+    pub url: String,
+    #[serde(default = "default_relay_client_id")]
+    pub client_id: String,
+    #[serde(default = "default_relay_topic_user_deleted")]
+    pub topic_user_deleted: String,
+}
+
+impl Default for RelayConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: default_relay_url(),
+            client_id: default_relay_client_id(),
+            topic_user_deleted: default_relay_topic_user_deleted(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -111,6 +136,7 @@ pub struct Secrets {
     pub database_url: String,
     pub encryption_key: Vec<u8>,
     pub jwt_secret: String,
+    pub relay_token: Option<String>,
 }
 
 impl std::fmt::Debug for Secrets {
@@ -147,11 +173,13 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
     }
 
     appliquer_overrides_enable_banking(&mut config.bank.enable_banking);
+    appliquer_overrides_relay(&mut config.relay);
 
     let secrets = Secrets {
         database_url: require("DATABASE_URL")?,
         encryption_key: decode_encryption_key(&require("BUDGY_ENCRYPTION_KEY")?)?,
         jwt_secret: require("JWT_SECRET")?,
+        relay_token: optional("RELAY_SERVICE_TOKEN"),
     };
     validate_secrets(&secrets)?;
 
@@ -208,6 +236,41 @@ fn appliquer_overrides_enable_banking(enable_banking: &mut EnableBankingConfig) 
     if let Some(redirect_url) = optional("ENABLE_BANKING_REDIRECT_URL") {
         enable_banking.redirect_url = Some(redirect_url);
     }
+}
+
+fn appliquer_overrides_relay(relay: &mut RelayConfig) {
+    if let Some(enabled) = optional("RELAY_ENABLED").and_then(|v| parse_bool(&v)) {
+        relay.enabled = enabled;
+    }
+    if let Some(url) = optional("RELAY_URL") {
+        relay.url = url;
+    }
+    if let Some(client_id) = optional("RELAY_CLIENT_ID") {
+        relay.client_id = client_id;
+    }
+    if let Some(topic) = optional("RELAY_TOPIC_USER_DELETED") {
+        relay.topic_user_deleted = topic;
+    }
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.trim().to_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Some(true),
+        "false" | "0" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn default_relay_url() -> String {
+    "mqtt://127.0.0.1:1883".to_string()
+}
+
+fn default_relay_client_id() -> String {
+    "ch-api-budgy".to_string()
+}
+
+fn default_relay_topic_user_deleted() -> String {
+    "auth/user/deleted".to_string()
 }
 
 fn default_enable_banking_base_url() -> String {

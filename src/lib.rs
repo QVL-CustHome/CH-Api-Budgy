@@ -7,6 +7,7 @@ pub mod domain;
 pub mod error;
 pub mod extract;
 pub mod handlers;
+pub mod relay;
 pub mod repository;
 pub mod routes;
 pub mod services;

@@ -79,6 +79,17 @@ impl SqlxBankAccountsRepository {
 
         Ok(Some(into_bank_account(crypto, row)?))
     }
+
+    pub async fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, ChiffrementError> {
+        let resultat = sqlx::query("DELETE FROM budgy.bank_account WHERE owner_id = $1")
+            .bind(&proprietaire.0)
+            .execute(&self.db)
+            .await?;
+        Ok(resultat.rows_affected())
+    }
 }
 
 #[derive(Clone)]
@@ -103,6 +114,16 @@ impl BankAccountsWriteRepository for SqlxBankAccountsWriteAdapter {
     ) -> Result<BankAccountId, EcritureError> {
         self.repo
             .insert(&self.crypto, nouveau)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    async fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        self.repo
+            .supprimer_par_proprietaire(proprietaire)
             .await
             .map_err(vers_ecriture_error)
     }
