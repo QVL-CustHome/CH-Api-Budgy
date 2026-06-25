@@ -1,5 +1,6 @@
 use crate::adapters::bank::mock::MockBankDataSource;
-use crate::adapters::bank::reel::GoCardlessBankDataSource;
+use crate::adapters::bank::reel::EnableBankingBankDataSource;
+use crate::config::EnableBankingConfig;
 use crate::domain::ports::bank_data_source::BankDataSource;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -9,12 +10,17 @@ use std::sync::Arc;
 pub enum SourceBancaire {
     #[default]
     Mock,
-    Gocardless,
+    EnableBanking,
 }
 
-pub fn construire_source(source: SourceBancaire) -> Arc<dyn BankDataSource> {
+pub fn construire_source(
+    source: SourceBancaire,
+    enable_banking: &EnableBankingConfig,
+) -> Arc<dyn BankDataSource> {
     match source {
         SourceBancaire::Mock => Arc::new(MockBankDataSource::new()),
-        SourceBancaire::Gocardless => Arc::new(GoCardlessBankDataSource::new()),
+        SourceBancaire::EnableBanking => {
+            Arc::new(EnableBankingBankDataSource::depuis_config(enable_banking))
+        }
     }
 }

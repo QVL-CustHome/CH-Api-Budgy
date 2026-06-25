@@ -39,6 +39,46 @@ pub struct Config {
 pub struct BankConfig {
     #[serde(default)]
     pub source: SourceBancaire,
+    #[serde(default)]
+    pub enable_banking: EnableBankingConfig,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct EnableBankingConfig {
+    #[serde(default = "default_enable_banking_base_url")]
+    pub base_url: String,
+    #[serde(default)]
+    pub app_id: Option<String>,
+    #[serde(default)]
+    pub private_key_pem: Option<String>,
+    #[serde(default)]
+    pub private_key_path: Option<String>,
+    #[serde(default)]
+    pub redirect_url: Option<String>,
+}
+
+impl Default for EnableBankingConfig {
+    fn default() -> Self {
+        Self {
+            base_url: default_enable_banking_base_url(),
+            app_id: None,
+            private_key_pem: None,
+            private_key_path: None,
+            redirect_url: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for EnableBankingConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnableBankingConfig")
+            .field("base_url", &self.base_url)
+            .field("app_id", &self.app_id.as_ref().map(|_| "***"))
+            .field("private_key_pem", &self.private_key_pem.as_ref().map(|_| "***"))
+            .field("private_key_path", &self.private_key_path)
+            .field("redirect_url", &self.redirect_url)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -106,6 +146,8 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         config.bank.source = source;
     }
 
+    appliquer_overrides_enable_banking(&mut config.bank.enable_banking);
+
     let secrets = Secrets {
         database_url: require("DATABASE_URL")?,
         encryption_key: decode_encryption_key(&require("BUDGY_ENCRYPTION_KEY")?)?,
@@ -145,9 +187,31 @@ fn optional(name: &str) -> Option<String> {
 fn parse_source_bancaire(value: &str) -> Option<SourceBancaire> {
     match value.trim().to_lowercase().as_str() {
         "mock" => Some(SourceBancaire::Mock),
-        "gocardless" => Some(SourceBancaire::Gocardless),
+        "enablebanking" => Some(SourceBancaire::EnableBanking),
         _ => None,
     }
+}
+
+fn appliquer_overrides_enable_banking(enable_banking: &mut EnableBankingConfig) {
+    if let Some(base_url) = optional("ENABLE_BANKING_BASE_URL") {
+        enable_banking.base_url = base_url;
+    }
+    if let Some(app_id) = optional("ENABLE_BANKING_APP_ID") {
+        enable_banking.app_id = Some(app_id);
+    }
+    if let Some(pem) = optional("ENABLE_BANKING_PRIVATE_KEY_PEM") {
+        enable_banking.private_key_pem = Some(pem);
+    }
+    if let Some(path) = optional("ENABLE_BANKING_PRIVATE_KEY_PATH") {
+        enable_banking.private_key_path = Some(path);
+    }
+    if let Some(redirect_url) = optional("ENABLE_BANKING_REDIRECT_URL") {
+        enable_banking.redirect_url = Some(redirect_url);
+    }
+}
+
+fn default_enable_banking_base_url() -> String {
+    "https://api.enablebanking.com".to_string()
 }
 
 fn default_log_level() -> String {

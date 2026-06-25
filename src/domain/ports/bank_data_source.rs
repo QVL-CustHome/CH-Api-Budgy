@@ -12,6 +12,10 @@ pub enum BankDataSourceError {
     ConsentementInvalide,
     #[error("établissement bancaire indisponible")]
     EtablissementIndisponible,
+    #[error("ressource bancaire introuvable")]
+    RessourceIntrouvable,
+    #[error("source bancaire non configurée")]
+    SourceNonConfiguree,
     #[error("réponse de la source illisible : {0}")]
     ReponseInvalide(String),
     #[error("erreur de la source bancaire : {0}")]
@@ -25,11 +29,29 @@ pub struct DemandeConsentement {
     pub url_retour: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConsentementInitie {
+    pub consent: Consent,
+    pub url_autorisation: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReponseAutorisation {
+    pub reference_autorisation: String,
+    pub code_autorisation: String,
+}
+
 #[async_trait]
 pub trait BankDataSource: Send + Sync {
     async fn initier_consentement(
         &self,
         demande: DemandeConsentement,
+    ) -> Result<ConsentementInitie, BankDataSourceError>;
+
+    async fn completer_consentement(
+        &self,
+        proprietaire: &ProprietaireId,
+        reponse: ReponseAutorisation,
     ) -> Result<Consent, BankDataSourceError>;
 
     async fn lister_comptes(
@@ -49,4 +71,9 @@ pub trait BankDataSource: Send + Sync {
         compte: &BankAccount,
         depuis: NaiveDate,
     ) -> Result<Vec<TransactionBancaire>, BankDataSourceError>;
+
+    async fn revoquer_consentement(
+        &self,
+        consent: &Consent,
+    ) -> Result<Consent, BankDataSourceError>;
 }

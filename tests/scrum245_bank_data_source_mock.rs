@@ -1,12 +1,37 @@
-use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source};
+use ch_api_budgy::adapters::bank::mock::MockBankDataSource;
 use ch_api_budgy::domain::compte::ProprietaireId;
-use ch_api_budgy::domain::ports::bank_data_source::DemandeConsentement;
+use ch_api_budgy::domain::consent::Consent;
+use ch_api_budgy::domain::ports::bank_data_source::{
+    BankDataSource, DemandeConsentement, ReponseAutorisation,
+};
 use ch_api_budgy::domain::transaction_bancaire::{TransactionStatus, dedup_key};
 use chrono::NaiveDate;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 const OWNER: &str = "owner-scrum-245";
 const ETABLISSEMENT: &str = "banque-demo";
+
+fn mock() -> Arc<dyn BankDataSource> {
+    Arc::new(MockBankDataSource::new())
+}
+
+async fn consentement_actif(source: &Arc<dyn BankDataSource>) -> Consent {
+    let initie = source
+        .initier_consentement(demande())
+        .await
+        .expect("le mock initie un consentement");
+    source
+        .completer_consentement(
+            &ProprietaireId(OWNER.to_string()),
+            ReponseAutorisation {
+                reference_autorisation: initie.consent.id.0.to_string(),
+                code_autorisation: "code-mock".to_string(),
+            },
+        )
+        .await
+        .expect("le mock complète le consentement")
+}
 
 fn demande() -> DemandeConsentement {
     DemandeConsentement {
@@ -22,11 +47,8 @@ fn depuis() -> NaiveDate {
 
 #[tokio::test]
 async fn la_bascule_par_configuration_fournit_le_mock() {
-    let source = construire_source(SourceBancaire::Mock);
-    let consent = source
-        .initier_consentement(demande())
-        .await
-        .expect("le mock initie un consentement");
+    let source = mock();
+    let consent = consentement_actif(&source).await;
     let comptes = source
         .lister_comptes(&consent)
         .await
@@ -37,11 +59,11 @@ async fn la_bascule_par_configuration_fournit_le_mock() {
 
 #[tokio::test]
 async fn le_mock_est_deterministe() {
-    let premiere = construire_source(SourceBancaire::Mock);
-    let seconde = construire_source(SourceBancaire::Mock);
+    let premiere = mock();
+    let seconde = mock();
 
-    let consent_a = premiere.initier_consentement(demande()).await.unwrap();
-    let consent_b = seconde.initier_consentement(demande()).await.unwrap();
+    let consent_a = consentement_actif(&premiere).await;
+    let consent_b = consentement_actif(&seconde).await;
     assert_eq!(consent_a.id, consent_b.id);
     assert_eq!(consent_a.external_ref, consent_b.external_ref);
     assert_eq!(consent_a.expires_at, consent_b.expires_at);
@@ -61,8 +83,8 @@ async fn le_mock_est_deterministe() {
 
 #[tokio::test]
 async fn les_transactions_du_mock_se_dedupliquent_par_cle() {
-    let source = construire_source(SourceBancaire::Mock);
-    let consent = source.initier_consentement(demande()).await.unwrap();
+    let source = mock();
+    let consent = consentement_actif(&source).await;
     let comptes = source.lister_comptes(&consent).await.unwrap();
     let compte = &comptes[0];
 
@@ -90,8 +112,8 @@ async fn les_transactions_du_mock_se_dedupliquent_par_cle() {
 
 #[tokio::test]
 async fn une_transaction_passe_de_pending_a_booked_au_rejeu() {
-    let source = construire_source(SourceBancaire::Mock);
-    let consent = source.initier_consentement(demande()).await.unwrap();
+    let source = mock();
+    let consent = consentement_actif(&source).await;
     let comptes = source.lister_comptes(&consent).await.unwrap();
     let compte = &comptes[0];
 
