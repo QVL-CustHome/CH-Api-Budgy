@@ -3,8 +3,12 @@ use crate::db::Db;
 use crate::domain::bank_account::{BankAccount, BankAccountId, NouveauBankAccount, masquer_iban};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::ConsentId;
-use crate::repository::chiffrement::{ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte};
+use crate::domain::ports::ecriture::{BankAccountsWriteRepository, EcritureError};
+use crate::repository::chiffrement::{
+    ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
+};
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const TABLE: &str = "bank_account";
@@ -74,6 +78,33 @@ impl SqlxBankAccountsRepository {
         };
 
         Ok(Some(into_bank_account(crypto, row)?))
+    }
+}
+
+#[derive(Clone)]
+pub struct SqlxBankAccountsWriteAdapter {
+    repo: SqlxBankAccountsRepository,
+    crypto: Arc<CryptoService>,
+}
+
+impl SqlxBankAccountsWriteAdapter {
+    pub fn new(db: Db, crypto: Arc<CryptoService>) -> Self {
+        Self {
+            repo: SqlxBankAccountsRepository::new(db),
+            crypto,
+        }
+    }
+}
+
+impl BankAccountsWriteRepository for SqlxBankAccountsWriteAdapter {
+    async fn enregistrer(
+        &self,
+        nouveau: NouveauBankAccount,
+    ) -> Result<BankAccountId, EcritureError> {
+        self.repo
+            .insert(&self.crypto, nouveau)
+            .await
+            .map_err(vers_ecriture_error)
     }
 }
 

@@ -1,27 +1,25 @@
 use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::ports::ecriture::{
+    BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
+};
 use crate::domain::transaction_bancaire::{
     NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
     dedup_key,
 };
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
-    dechiffrer_texte,
+    dechiffrer_texte, vers_ecriture_error,
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const TABLE: &str = "bank_transaction";
 const FIELD_EXTERNAL_TRANSACTION_ID: &str = "external_transaction_id";
 const FIELD_LABEL: &str = "label";
 const FIELD_AMOUNT: &str = "amount_cents";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InsertOutcome {
-    Inserted(TransactionBancaireId),
-    Duplicate,
-}
 
 #[derive(Clone)]
 pub struct SqlxBankTransactionsRepository {
@@ -37,7 +35,7 @@ impl SqlxBankTransactionsRepository {
         &self,
         crypto: &CryptoService,
         nouvelle: NouvelleTransactionBancaire,
-    ) -> Result<InsertOutcome, ChiffrementError> {
+    ) -> Result<ResultatInsertion<TransactionBancaireId>, ChiffrementError> {
         let owner = self.owner_du_compte(&nouvelle.bank_account).await?;
         let external_transaction_id = chiffrer_texte(
             crypto,
@@ -71,8 +69,8 @@ impl SqlxBankTransactionsRepository {
         .await?;
 
         Ok(match id {
-            Some(id) => InsertOutcome::Inserted(TransactionBancaireId(id)),
-            None => InsertOutcome::Duplicate,
+            Some(id) => ResultatInsertion::Inseree(TransactionBancaireId(id)),
+            None => ResultatInsertion::Doublon,
         })
     }
 
@@ -108,6 +106,33 @@ impl SqlxBankTransactionsRepository {
                 .fetch_one(&self.db)
                 .await?;
         Ok(owner)
+    }
+}
+
+#[derive(Clone)]
+pub struct SqlxBankTransactionsWriteAdapter {
+    repo: SqlxBankTransactionsRepository,
+    crypto: Arc<CryptoService>,
+}
+
+impl SqlxBankTransactionsWriteAdapter {
+    pub fn new(db: Db, crypto: Arc<CryptoService>) -> Self {
+        Self {
+            repo: SqlxBankTransactionsRepository::new(db),
+            crypto,
+        }
+    }
+}
+
+impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
+    async fn enregistrer(
+        &self,
+        nouvelle: NouvelleTransactionBancaire,
+    ) -> Result<ResultatInsertion<TransactionBancaireId>, EcritureError> {
+        self.repo
+            .insert(&self.crypto, nouvelle)
+            .await
+            .map_err(vers_ecriture_error)
     }
 }
 

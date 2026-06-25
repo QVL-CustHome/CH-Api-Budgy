@@ -1,3 +1,4 @@
+use crate::adapters::bank::selection::SourceBancaire;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use figment::Figment;
@@ -30,6 +31,14 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub token: TokenConfig,
+    #[serde(default)]
+    pub bank: BankConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BankConfig {
+    #[serde(default)]
+    pub source: SourceBancaire,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +102,10 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         config.token.audience = audience;
     }
 
+    if let Some(source) = optional("BANK_SOURCE").and_then(|v| parse_source_bancaire(&v)) {
+        config.bank.source = source;
+    }
+
     let secrets = Secrets {
         database_url: require("DATABASE_URL")?,
         encryption_key: decode_encryption_key(&require("BUDGY_ENCRYPTION_KEY")?)?,
@@ -127,6 +140,14 @@ fn require(name: &'static str) -> Result<String, ConfigError> {
 
 fn optional(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+}
+
+fn parse_source_bancaire(value: &str) -> Option<SourceBancaire> {
+    match value.trim().to_lowercase().as_str() {
+        "mock" => Some(SourceBancaire::Mock),
+        "gocardless" => Some(SourceBancaire::Gocardless),
+        _ => None,
+    }
 }
 
 fn default_log_level() -> String {

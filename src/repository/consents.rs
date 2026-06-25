@@ -2,8 +2,12 @@ use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
-use crate::repository::chiffrement::{ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte};
+use crate::domain::ports::ecriture::{ConsentsWriteRepository, EcritureError};
+use crate::repository::chiffrement::{
+    ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
+};
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const TABLE: &str = "consent";
@@ -60,6 +64,30 @@ impl SqlxConsentsRepository {
         };
 
         Ok(Some(into_consent(crypto, row)?))
+    }
+}
+
+#[derive(Clone)]
+pub struct SqlxConsentsWriteAdapter {
+    repo: SqlxConsentsRepository,
+    crypto: Arc<CryptoService>,
+}
+
+impl SqlxConsentsWriteAdapter {
+    pub fn new(db: Db, crypto: Arc<CryptoService>) -> Self {
+        Self {
+            repo: SqlxConsentsRepository::new(db),
+            crypto,
+        }
+    }
+}
+
+impl ConsentsWriteRepository for SqlxConsentsWriteAdapter {
+    async fn enregistrer(&self, nouveau: NouveauConsent) -> Result<ConsentId, EcritureError> {
+        self.repo
+            .insert(&self.crypto, nouveau)
+            .await
+            .map_err(vers_ecriture_error)
     }
 }
 
