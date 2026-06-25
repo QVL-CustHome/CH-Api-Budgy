@@ -1,7 +1,7 @@
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::BankAccount;
 use crate::domain::compte::ProprietaireId;
-use crate::domain::consent::Consent;
+use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::transaction_bancaire::TransactionBancaire;
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -23,7 +23,15 @@ pub enum BankDataSourceError {
 }
 
 #[derive(Debug, Clone)]
+pub struct Etablissement {
+    pub id: String,
+    pub nom: String,
+    pub pays: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct DemandeConsentement {
+    pub consent_id: ConsentId,
     pub proprietaire: ProprietaireId,
     pub etablissement: String,
     pub url_retour: String,
@@ -43,6 +51,8 @@ pub struct ReponseAutorisation {
 
 #[async_trait]
 pub trait BankDataSource: Send + Sync {
+    async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError>;
+
     async fn initier_consentement(
         &self,
         demande: DemandeConsentement,

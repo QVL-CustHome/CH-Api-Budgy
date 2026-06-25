@@ -1,7 +1,9 @@
 use crate::domain::balance::{BalanceId, NouvelleBalance};
 use crate::domain::bank_account::{BankAccountId, NouveauBankAccount};
 use crate::domain::compte::ProprietaireId;
-use crate::domain::consent::{ConsentId, NouveauConsent};
+use crate::domain::consent::{
+    ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
+};
 use crate::domain::transaction_bancaire::{NouvelleTransactionBancaire, TransactionBancaireId};
 use std::future::Future;
 
@@ -24,6 +26,25 @@ pub trait ConsentsWriteRepository: Send + Sync {
         &self,
         nouveau: NouveauConsent,
     ) -> impl Future<Output = Result<ConsentId, EcritureError>> + Send;
+
+    fn enregistrer_initie(
+        &self,
+        nouveau: NouveauConsentInitie,
+    ) -> impl Future<Output = Result<ConsentId, EcritureError>> + Send;
+
+    fn mettre_a_jour(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &ConsentId,
+        mise_a_jour: MiseAJourConsent,
+    ) -> impl Future<Output = Result<bool, EcritureError>> + Send;
+
+    fn marquer_statut(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &ConsentId,
+        status: ConsentStatus,
+    ) -> impl Future<Output = Result<bool, EcritureError>> + Send;
 
     fn supprimer_par_proprietaire(
         &self,
