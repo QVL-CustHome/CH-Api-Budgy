@@ -2,10 +2,12 @@ use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::balance::{Balance, BalanceId, BalanceType, NouvelleBalance};
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::ports::ecriture::{BalancesWriteRepository, EcritureError};
 use crate::repository::chiffrement::{
-    ChiffrementError, KEY_VERSION, chiffrer_montant, dechiffrer_montant,
+    ChiffrementError, KEY_VERSION, chiffrer_montant, dechiffrer_montant, vers_ecriture_error,
 };
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const TABLE: &str = "balance";
@@ -78,6 +80,30 @@ impl SqlxBalancesRepository {
                 .fetch_one(&self.db)
                 .await?;
         Ok(owner)
+    }
+}
+
+#[derive(Clone)]
+pub struct SqlxBalancesWriteAdapter {
+    repo: SqlxBalancesRepository,
+    crypto: Arc<CryptoService>,
+}
+
+impl SqlxBalancesWriteAdapter {
+    pub fn new(db: Db, crypto: Arc<CryptoService>) -> Self {
+        Self {
+            repo: SqlxBalancesRepository::new(db),
+            crypto,
+        }
+    }
+}
+
+impl BalancesWriteRepository for SqlxBalancesWriteAdapter {
+    async fn enregistrer(&self, nouvelle: NouvelleBalance) -> Result<BalanceId, EcritureError> {
+        self.repo
+            .insert(&self.crypto, nouvelle)
+            .await
+            .map_err(vers_ecriture_error)
     }
 }
 
