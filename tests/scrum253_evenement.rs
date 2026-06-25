@@ -2,10 +2,12 @@ use async_trait::async_trait;
 use ch_api_budgy::domain::balance::Balance;
 use ch_api_budgy::domain::bank_account::{BankAccount, BankAccountId, NouveauBankAccount};
 use ch_api_budgy::domain::compte::ProprietaireId;
-use ch_api_budgy::domain::consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
+use ch_api_budgy::domain::consent::{
+    Consent, ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
+};
 use ch_api_budgy::domain::effacement::EffacementProprietaire;
 use ch_api_budgy::domain::ports::bank_data_source::{
-    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement,
+    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
     ReponseAutorisation,
 };
 use ch_api_budgy::domain::ports::ecriture::{
@@ -53,11 +55,55 @@ impl ConsentsReadRepository for ConsentsEnMemoire {
             .cloned()
             .collect())
     }
+
+    async fn lister_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<Consent>, LectureError> {
+        self.lister_actifs_par_proprietaire(proprietaire).await
+    }
+
+    async fn fetch_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &ConsentId,
+    ) -> Result<Option<Consent>, LectureError> {
+        let actifs = self.actifs.lock().expect("verrou actifs");
+        Ok(actifs
+            .iter()
+            .find(|c| &c.proprietaire == proprietaire && &c.id == id)
+            .cloned())
+    }
 }
 
 impl ConsentsWriteRepository for ConsentsEnMemoire {
     async fn enregistrer(&self, _nouveau: NouveauConsent) -> Result<ConsentId, EcritureError> {
         Ok(ConsentId(Uuid::new_v4()))
+    }
+
+    async fn enregistrer_initie(
+        &self,
+        nouveau: NouveauConsentInitie,
+    ) -> Result<ConsentId, EcritureError> {
+        Ok(nouveau.id)
+    }
+
+    async fn mettre_a_jour(
+        &self,
+        _proprietaire: &ProprietaireId,
+        _id: &ConsentId,
+        _mise_a_jour: MiseAJourConsent,
+    ) -> Result<bool, EcritureError> {
+        Ok(true)
+    }
+
+    async fn marquer_statut(
+        &self,
+        _proprietaire: &ProprietaireId,
+        _id: &ConsentId,
+        _status: ConsentStatus,
+    ) -> Result<bool, EcritureError> {
+        Ok(true)
     }
 
     async fn supprimer_par_proprietaire(
@@ -111,6 +157,10 @@ impl SourceRevocation {
 
 #[async_trait]
 impl BankDataSource for SourceRevocation {
+    async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError> {
+        Ok(vec![])
+    }
+
     async fn initier_consentement(
         &self,
         _demande: DemandeConsentement,

@@ -4,12 +4,12 @@ pub mod mapping;
 pub mod transport;
 
 use crate::adapters::bank::enable_banking::dto::{
-    AccessDemande, AspspReference, DemandeAuth, DemandeSession, ReponseAuth, ReponseBalances,
-    ReponseSession, ReponseTransactions,
+    AccessDemande, AspspReference, DemandeAuth, DemandeSession, ReponseAspsps, ReponseAuth,
+    ReponseBalances, ReponseSession, ReponseTransactions,
 };
 use crate::adapters::bank::enable_banking::jwt::SignataireJwt;
 use crate::adapters::bank::enable_banking::mapping::{
-    consent_id_depuis_reference, consent_id_initial, vers_balance, vers_bank_account,
+    consent_id_depuis_reference, vers_balance, vers_bank_account, vers_etablissement,
     vers_transaction,
 };
 use crate::adapters::bank::enable_banking::transport::{
@@ -20,7 +20,8 @@ use crate::domain::bank_account::BankAccount;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentStatus};
 use crate::domain::ports::bank_data_source::{
-    BankDataSourceError, ConsentementInitie, DemandeConsentement, ReponseAutorisation,
+    BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
+    ReponseAutorisation,
 };
 use crate::domain::transaction_bancaire::TransactionBancaire;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -83,19 +84,30 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
         }
     }
 
+    pub async fn lister_etablissements(
+        &self,
+    ) -> Result<Vec<Etablissement>, BankDataSourceError> {
+        let reponse = self
+            .appeler(MethodeHttp::Get, "/aspsps".to_string(), None)
+            .await?;
+        let aspsps: ReponseAspsps = Self::deserialiser(&reponse.corps)?;
+        Ok(aspsps.aspsps.iter().map(vers_etablissement).collect())
+    }
+
     pub async fn initier_consentement(
         &self,
         demande: DemandeConsentement,
         horodatage: DateTime<Utc>,
     ) -> Result<ConsentementInitie, BankDataSourceError> {
         let valid_until = (horodatage + Duration::days(VALIDITE_CONSENTEMENT_JOURS)).to_rfc3339();
+        let state = demande.consent_id.0.to_string();
         let corps = DemandeAuth {
             access: AccessDemande { valid_until },
             aspsp: AspspReference {
                 name: demande.etablissement.clone(),
                 country: PAYS_DEFAUT.to_string(),
             },
-            state: demande.proprietaire.0.clone(),
+            state: state.clone(),
             redirect_url: self.url_retour(&demande),
             psu_type: PSU_TYPE_PERSONNEL.to_string(),
         };
@@ -106,13 +118,8 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
             .await?;
         let auth: ReponseAuth = Self::deserialiser(&reponse.corps)?;
 
-        let consent_id = consent_id_initial(
-            &demande.proprietaire.0,
-            &demande.etablissement,
-            &auth.authorization_id,
-        );
         let consent = Consent {
-            id: consent_id,
+            id: demande.consent_id,
             proprietaire: demande.proprietaire,
             external_ref: auth.authorization_id,
             status: ConsentStatus::Pending,
@@ -122,7 +129,7 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
         };
         Ok(ConsentementInitie {
             consent,
-            url_autorisation: auth.url,
+            url_autorisation: ajouter_state(&auth.url, &state),
         })
     }
 
@@ -240,6 +247,14 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
             ..consent.clone()
         })
     }
+}
+
+fn ajouter_state(url: &str, state: &str) -> String {
+    if url.contains(&format!("state={state}")) {
+        return url.to_string();
+    }
+    let separateur = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{separateur}state={state}")
 }
 
 fn traduire_transport(erreur: TransportError) -> BankDataSourceError {

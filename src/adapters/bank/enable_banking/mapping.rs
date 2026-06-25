@@ -1,11 +1,11 @@
 use crate::adapters::bank::determinisme::uuid_depuis;
 use crate::adapters::bank::enable_banking::dto::{
-    BalanceWire, CompteSession, MontantWire, TransactionWire,
+    AspspWire, BalanceWire, CompteSession, MontantWire, TransactionWire,
 };
 use crate::domain::balance::{Balance, BalanceId, BalanceType};
 use crate::domain::bank_account::{BankAccount, BankAccountId, masquer_iban};
 use crate::domain::consent::{Consent, ConsentId};
-use crate::domain::ports::bank_data_source::BankDataSourceError;
+use crate::domain::ports::bank_data_source::{BankDataSourceError, Etablissement};
 use crate::domain::transaction_bancaire::{
     TransactionBancaire, TransactionBancaireId, TransactionStatus,
 };
@@ -180,18 +180,17 @@ pub fn vers_transaction(
     })
 }
 
-pub fn consent_id_initial(
-    proprietaire: &str,
-    etablissement: &str,
-    authorization_id: &str,
-) -> ConsentId {
-    ConsentId(uuid_depuis(&format!(
-        "eb-consent-{proprietaire}-{etablissement}-{authorization_id}"
-    )))
-}
-
 pub fn consent_id_depuis_reference(reference_autorisation: &str) -> Option<ConsentId> {
     uuid::Uuid::parse_str(reference_autorisation)
         .ok()
         .map(ConsentId)
+}
+
+pub fn vers_etablissement(aspsp: &AspspWire) -> Etablissement {
+    let pays = aspsp.country.clone().unwrap_or_default();
+    Etablissement {
+        id: format!("{}|{}", aspsp.name, pays),
+        nom: aspsp.name.clone(),
+        pays,
+    }
 }

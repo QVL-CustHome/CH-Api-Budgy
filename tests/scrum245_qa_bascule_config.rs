@@ -2,6 +2,7 @@ use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source}
 use ch_api_budgy::config::EnableBankingConfig;
 use ch_api_budgy::config;
 use ch_api_budgy::domain::compte::ProprietaireId;
+use ch_api_budgy::domain::consent::ConsentId;
 use ch_api_budgy::domain::ports::bank_data_source::{BankDataSourceError, DemandeConsentement};
 use std::sync::Mutex;
 
@@ -126,6 +127,7 @@ fn une_valeur_bank_source_invalide_est_ignoree_et_conserve_la_config() {
 async fn la_source_reelle_sans_credentials_refuse_proprement() {
     let source = construire_source(SourceBancaire::EnableBanking, &EnableBankingConfig::default());
     let demande = DemandeConsentement {
+        consent_id: ConsentId(uuid::Uuid::new_v4()),
         proprietaire: ProprietaireId("owner-qa-245".to_string()),
         etablissement: "banque-demo".to_string(),
         url_retour: "https://budgy.custhome.app/retour".to_string(),

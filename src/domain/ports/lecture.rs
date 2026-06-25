@@ -1,5 +1,6 @@
+use crate::domain::bank_account::BankAccount;
 use crate::domain::compte::{Compte, CompteId, ProprietaireId};
-use crate::domain::consent::Consent;
+use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::transaction::Transaction;
 use chrono::NaiveDate;
 use std::future::Future;
@@ -65,4 +66,23 @@ pub trait ConsentsReadRepository: Send + Sync {
         &self,
         proprietaire: &ProprietaireId,
     ) -> impl Future<Output = Result<Vec<Consent>, LectureError>> + Send;
+
+    fn lister_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<Consent>, LectureError>> + Send;
+
+    fn fetch_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &ConsentId,
+    ) -> impl Future<Output = Result<Option<Consent>, LectureError>> + Send;
+}
+
+pub trait BankAccountsReadRepository: Send + Sync {
+    fn lister_par_consent(
+        &self,
+        proprietaire: &ProprietaireId,
+        consent: &ConsentId,
+    ) -> impl Future<Output = Result<Vec<BankAccount>, LectureError>> + Send;
 }
