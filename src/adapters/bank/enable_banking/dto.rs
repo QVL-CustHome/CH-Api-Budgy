@@ -21,6 +21,19 @@ pub struct AspspReference {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ReponseAspsps {
+    #[serde(default)]
+    pub aspsps: Vec<AspspWire>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AspspWire {
+    pub name: String,
+    #[serde(default)]
+    pub country: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ReponseAuth {
     pub url: String,
     pub authorization_id: String,

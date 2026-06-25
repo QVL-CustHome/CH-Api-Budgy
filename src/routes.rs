@@ -1,7 +1,7 @@
 use crate::handlers;
 use crate::state::AppState;
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
 
 pub const API_VERSION_PREFIX: &str = "/v1";
 
@@ -27,5 +27,14 @@ fn public_routes() -> Router<AppState> {
         .route(
             "/transactions",
             get(handlers::transactions::list_transactions),
+        )
+        .route("/banks", get(handlers::banques::list_banks))
+        .route(
+            "/consents",
+            get(handlers::banques::list_consents).post(handlers::banques::create_consent),
+        )
+        .route(
+            "/consents/callback",
+            post(handlers::banques::complete_consent),
         )
 }

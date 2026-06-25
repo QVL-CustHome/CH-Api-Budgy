@@ -30,6 +30,10 @@ pub struct NouveauBankAccount {
     pub next_sync_at: Option<DateTime<Utc>>,
 }
 
+pub fn dedup_key(consent: &ConsentId, external_account_id: &str) -> String {
+    format!("{}:{external_account_id}", consent.0)
+}
+
 pub fn masquer_iban(iban: &str) -> String {
     let compact: String = iban.chars().filter(|c| !c.is_whitespace()).collect();
     let conserves = 4;

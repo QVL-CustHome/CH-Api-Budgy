@@ -10,6 +10,8 @@ pub enum ApiErrorCode {
     Forbidden,
     NotFound,
     Conflict,
+    ConsentRefused,
+    BankUnavailable,
     Internal,
 }
 
@@ -21,6 +23,8 @@ impl ApiErrorCode {
             ApiErrorCode::Forbidden => "forbidden",
             ApiErrorCode::NotFound => "not_found",
             ApiErrorCode::Conflict => "conflict",
+            ApiErrorCode::ConsentRefused => "consentement_refuse",
+            ApiErrorCode::BankUnavailable => "banque_indisponible",
             ApiErrorCode::Internal => "internal_error",
         }
     }
@@ -32,6 +36,8 @@ impl ApiErrorCode {
             ApiErrorCode::Forbidden => StatusCode::FORBIDDEN,
             ApiErrorCode::NotFound => StatusCode::NOT_FOUND,
             ApiErrorCode::Conflict => StatusCode::CONFLICT,
+            ApiErrorCode::ConsentRefused => StatusCode::CONFLICT,
+            ApiErrorCode::BankUnavailable => StatusCode::BAD_GATEWAY,
             ApiErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -75,6 +81,14 @@ impl ApiError {
 
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(ApiErrorCode::Conflict, message)
+    }
+
+    pub fn consent_refused(message: impl Into<String>) -> Self {
+        Self::new(ApiErrorCode::ConsentRefused, message)
+    }
+
+    pub fn bank_unavailable(message: impl Into<String>) -> Self {
+        Self::new(ApiErrorCode::BankUnavailable, message)
     }
 
     pub fn internal(message: impl Into<String>) -> Self {

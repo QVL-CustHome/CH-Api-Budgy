@@ -1,6 +1,6 @@
 use ch_api_budgy::adapters::bank::mock::MockBankDataSource;
 use ch_api_budgy::domain::compte::ProprietaireId;
-use ch_api_budgy::domain::consent::Consent;
+use ch_api_budgy::domain::consent::{Consent, ConsentId};
 use ch_api_budgy::domain::ports::bank_data_source::{
     BankDataSource, DemandeConsentement, ReponseAutorisation,
 };
@@ -33,8 +33,11 @@ async fn consentement_actif(source: &Arc<dyn BankDataSource>) -> Consent {
         .expect("le mock complète le consentement")
 }
 
+const CONSENT_ID_DETERMINISTE: uuid::Uuid = uuid::Uuid::from_u128(0x5c2f_245d_4a11_4b22_9c33_d044_e055_f066);
+
 fn demande() -> DemandeConsentement {
     DemandeConsentement {
+        consent_id: ConsentId(CONSENT_ID_DETERMINISTE),
         proprietaire: ProprietaireId(OWNER.to_string()),
         etablissement: ETABLISSEMENT.to_string(),
         url_retour: "https://budgy.custhome.app/retour".to_string(),

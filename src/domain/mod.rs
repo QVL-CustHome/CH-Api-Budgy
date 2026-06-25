@@ -16,9 +16,11 @@ pub use bank_account::{BankAccount, BankAccountId, NouveauBankAccount};
 pub use budget::Budget;
 pub use categorie::Categorie;
 pub use compte::Compte;
-pub use consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
+pub use consent::{
+    Consent, ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
+};
 pub use ports::bank_data_source::{
-    BankDataSource, ConsentementInitie, DemandeConsentement, ReponseAutorisation,
+    BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,
 };
 pub use previsionnel::Previsionnel;
 pub use regle_categorisation::{ChampCible, OperateurCorrespondance, RegleCategorisation};
