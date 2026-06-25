@@ -23,7 +23,10 @@ impl AppState {
         Self {
             comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
             transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
-            bank_source: construire_source(settings.config.bank.source),
+            bank_source: construire_source(
+                settings.config.bank.source,
+                &settings.config.bank.enable_banking,
+            ),
             db,
             crypto: Arc::new(
                 CryptoService::from_key(&settings.secrets.encryption_key)

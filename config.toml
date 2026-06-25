@@ -4,3 +4,6 @@ log_level = "INFO"
 
 [bank]
 source = "mock"
+
+[bank.enable_banking]
+base_url = "https://api.enablebanking.com"
