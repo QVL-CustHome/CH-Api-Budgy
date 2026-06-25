@@ -2,7 +2,9 @@ use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
-use crate::domain::ports::ecriture::{ConsentsWriteRepository, EcritureError};
+use crate::domain::ports::ecriture::{
+    ConsentsStatutWriteRepository, ConsentsWriteRepository, EcritureError,
+};
 use crate::domain::ports::lecture::{ConsentsReadRepository, LectureError};
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
@@ -96,6 +98,19 @@ impl SqlxConsentsRepository {
             .await?;
         Ok(resultat.rows_affected())
     }
+
+    pub async fn marquer_statut(
+        &self,
+        consent: &ConsentId,
+        statut: ConsentStatus,
+    ) -> Result<(), ChiffrementError> {
+        sqlx::query("UPDATE budgy.consent SET status = $2, updated_at = now() WHERE id = $1")
+            .bind(consent.0)
+            .bind(statut.as_str())
+            .execute(&self.db)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -127,6 +142,19 @@ impl ConsentsWriteRepository for SqlxConsentsWriteAdapter {
     ) -> Result<u64, EcritureError> {
         self.repo
             .supprimer_par_proprietaire(proprietaire)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+}
+
+impl ConsentsStatutWriteRepository for SqlxConsentsWriteAdapter {
+    async fn marquer_statut(
+        &self,
+        consent: &ConsentId,
+        statut: ConsentStatus,
+    ) -> Result<(), EcritureError> {
+        self.repo
+            .marquer_statut(consent, statut)
             .await
             .map_err(vers_ecriture_error)
     }

@@ -13,3 +13,9 @@ enabled = false
 url = "mqtt://127.0.0.1:1883"
 client_id = "ch-api-budgy"
 topic_user_deleted = "auth/user/deleted"
+
+[worker_synchro]
+enabled = false
+interval_secondes = 21600
+quota_journalier = 4
+fenetre_transactions_jours = 30

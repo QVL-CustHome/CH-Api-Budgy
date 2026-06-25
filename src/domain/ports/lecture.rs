@@ -1,7 +1,8 @@
+use crate::domain::bank_account::CompteASynchroniser;
 use crate::domain::compte::{Compte, CompteId, ProprietaireId};
 use crate::domain::consent::Consent;
 use crate::domain::transaction::Transaction;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use std::future::Future;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,4 +66,18 @@ pub trait ConsentsReadRepository: Send + Sync {
         &self,
         proprietaire: &ProprietaireId,
     ) -> impl Future<Output = Result<Vec<Consent>, LectureError>> + Send;
+}
+
+#[derive(Debug, Clone)]
+pub struct CompteEcheant {
+    pub compte: CompteASynchroniser,
+    pub consent: Consent,
+}
+
+pub trait PlanificationSynchroReadRepository: Send + Sync {
+    fn lister_comptes_echeants(
+        &self,
+        maintenant: DateTime<Utc>,
+        quota_journalier: i32,
+    ) -> impl Future<Output = Result<Vec<CompteEcheant>, LectureError>> + Send;
 }

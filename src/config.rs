@@ -35,6 +35,31 @@ pub struct Config {
     pub bank: BankConfig,
     #[serde(default)]
     pub relay: RelayConfig,
+    #[serde(default)]
+    pub worker_synchro: WorkerSynchroSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkerSynchroSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_worker_interval_secondes")]
+    pub interval_secondes: u64,
+    #[serde(default = "default_worker_quota_journalier")]
+    pub quota_journalier: i32,
+    #[serde(default = "default_worker_fenetre_jours")]
+    pub fenetre_transactions_jours: i64,
+}
+
+impl Default for WorkerSynchroSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secondes: default_worker_interval_secondes(),
+            quota_journalier: default_worker_quota_journalier(),
+            fenetre_transactions_jours: default_worker_fenetre_jours(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -174,6 +199,7 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
 
     appliquer_overrides_enable_banking(&mut config.bank.enable_banking);
     appliquer_overrides_relay(&mut config.relay);
+    appliquer_overrides_worker(&mut config.worker_synchro);
 
     let secrets = Secrets {
         database_url: require("DATABASE_URL")?,
@@ -253,12 +279,45 @@ fn appliquer_overrides_relay(relay: &mut RelayConfig) {
     }
 }
 
+fn appliquer_overrides_worker(worker: &mut WorkerSynchroSettings) {
+    if let Some(enabled) = optional("WORKER_SYNCHRO_ENABLED").and_then(|v| parse_bool(&v)) {
+        worker.enabled = enabled;
+    }
+    if let Some(interval) =
+        optional("WORKER_SYNCHRO_INTERVAL_SECONDES").and_then(|v| v.parse::<u64>().ok())
+    {
+        worker.interval_secondes = interval;
+    }
+    if let Some(quota) =
+        optional("WORKER_SYNCHRO_QUOTA_JOURNALIER").and_then(|v| v.parse::<i32>().ok())
+    {
+        worker.quota_journalier = quota;
+    }
+    if let Some(fenetre) =
+        optional("WORKER_SYNCHRO_FENETRE_JOURS").and_then(|v| v.parse::<i64>().ok())
+    {
+        worker.fenetre_transactions_jours = fenetre;
+    }
+}
+
 fn parse_bool(value: &str) -> Option<bool> {
     match value.trim().to_lowercase().as_str() {
         "true" | "1" | "yes" | "on" => Some(true),
         "false" | "0" | "no" | "off" => Some(false),
         _ => None,
     }
+}
+
+fn default_worker_interval_secondes() -> u64 {
+    6 * 60 * 60
+}
+
+fn default_worker_quota_journalier() -> i32 {
+    4
+}
+
+fn default_worker_fenetre_jours() -> i64 {
+    30
 }
 
 fn default_relay_url() -> String {

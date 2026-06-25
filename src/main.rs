@@ -1,10 +1,16 @@
 use ch_api_budgy::config;
+use ch_api_budgy::config::WorkerSynchroSettings;
 use ch_api_budgy::db;
+use ch_api_budgy::domain::synchro::ParametresSynchro;
 use ch_api_budgy::relay::abonne::AbonneRelay;
 use ch_api_budgy::relay::handler::UserDeletedHandler;
 use ch_api_budgy::routes;
 use ch_api_budgy::state::AppState;
+use ch_api_budgy::worker::WorkerSynchroConfig;
+use ch_api_budgy::worker::synchro::construire_service_synchro;
+use chrono::Duration as ChronoDuration;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
@@ -55,6 +61,8 @@ async fn main() {
         }
     };
 
+    let worker_synchro = demarrer_worker_synchro(&settings.config.worker_synchro, &state);
+
     let app = routes::router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
@@ -75,10 +83,36 @@ async fn main() {
         abonne_relay.arreter();
     }
 
+    if let Some(worker_synchro) = worker_synchro {
+        worker_synchro.arreter().await;
+    }
+
     if let Err(e) = resultat {
         eprintln!("Erreur serveur : {e}");
         std::process::exit(1);
     }
+}
+
+fn demarrer_worker_synchro(
+    settings: &WorkerSynchroSettings,
+    state: &AppState,
+) -> Option<ch_api_budgy::worker::WorkerSynchro> {
+    let parametres = ParametresSynchro {
+        quota_journalier: settings.quota_journalier,
+        intervalle: ChronoDuration::seconds(settings.interval_secondes as i64),
+        fenetre_transactions: ChronoDuration::days(settings.fenetre_transactions_jours),
+    };
+    let service = construire_service_synchro(
+        state.db.clone(),
+        state.crypto.clone(),
+        state.bank_source.clone(),
+        parametres,
+    );
+    let config = WorkerSynchroConfig {
+        enabled: settings.enabled,
+        intervalle: Duration::from_secs(settings.interval_secondes),
+    };
+    ch_api_budgy::worker::WorkerSynchro::demarrer(config, Arc::new(service))
 }
 
 async fn attendre_arret() {
