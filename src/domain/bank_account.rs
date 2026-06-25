@@ -1,6 +1,6 @@
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::ConsentId;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +28,24 @@ pub struct NouveauBankAccount {
     pub iban: String,
     pub currency: String,
     pub next_sync_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompteASynchroniser {
+    pub id: BankAccountId,
+    pub proprietaire: ProprietaireId,
+    pub consent: ConsentId,
+    pub external_account_id: String,
+    pub currency: String,
+    pub sync_count_today: i32,
+    pub last_sync_day: Option<NaiveDate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlanificationSynchro {
+    pub next_sync_at: DateTime<Utc>,
+    pub last_sync_day: NaiveDate,
+    pub last_sync_at: DateTime<Utc>,
 }
 
 pub fn masquer_iban(iban: &str) -> String {
