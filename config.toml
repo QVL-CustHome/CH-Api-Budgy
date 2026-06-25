@@ -7,3 +7,9 @@ source = "mock"
 
 [bank.enable_banking]
 base_url = "https://api.enablebanking.com"
+
+[relay]
+enabled = false
+url = "mqtt://127.0.0.1:1883"
+client_id = "ch-api-budgy"
+topic_user_deleted = "auth/user/deleted"

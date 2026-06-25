@@ -1,7 +1,10 @@
 use ch_api_budgy::config;
 use ch_api_budgy::db;
+use ch_api_budgy::relay::abonne::AbonneRelay;
+use ch_api_budgy::relay::handler::UserDeletedHandler;
 use ch_api_budgy::routes;
 use ch_api_budgy::state::AppState;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
@@ -34,6 +37,24 @@ async fn main() {
 
     let port = settings.config.server.port;
     let state = AppState::new(&settings, pool);
+
+    let handler = Arc::new(UserDeletedHandler::new(
+        state.db.clone(),
+        state.crypto.clone(),
+        state.bank_source.clone(),
+    ));
+    let abonne_relay = match AbonneRelay::demarrer(
+        &settings.config.relay,
+        settings.secrets.relay_token.clone(),
+        handler,
+    ) {
+        Ok(abonne) => abonne,
+        Err(e) => {
+            tracing::error!(error = %e, "abonné Relay non démarré");
+            None
+        }
+    };
+
     let app = routes::router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
@@ -46,9 +67,23 @@ async fn main() {
     };
 
     tracing::info!(%addr, version = env!("CARGO_PKG_VERSION"), "CH-Api-Budgy démarré");
-    if let Err(e) = axum::serve(listener, app).await {
+    let resultat = axum::serve(listener, app)
+        .with_graceful_shutdown(attendre_arret())
+        .await;
+
+    if let Some(abonne_relay) = abonne_relay {
+        abonne_relay.arreter();
+    }
+
+    if let Err(e) = resultat {
         eprintln!("Erreur serveur : {e}");
         std::process::exit(1);
+    }
+}
+
+async fn attendre_arret() {
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        tracing::error!(error = %e, "écoute du signal d'arrêt impossible");
     }
 }
 

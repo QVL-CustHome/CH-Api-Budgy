@@ -90,12 +90,12 @@ impl TransportHttp for ReqwestTransport {
         let reponse = builder
             .send()
             .await
-            .map_err(|e| TransportError::Reseau(e.to_string()))?;
+            .map_err(|e| TransportError::Reseau(e.without_url().to_string()))?;
         let statut = reponse.status().as_u16();
         let corps = reponse
             .text()
             .await
-            .map_err(|e| TransportError::Reseau(e.to_string()))?;
+            .map_err(|e| TransportError::Reseau(e.without_url().to_string()))?;
 
         Ok(ReponseHttp { statut, corps })
     }

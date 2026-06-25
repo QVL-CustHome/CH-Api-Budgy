@@ -3,6 +3,7 @@ use crate::db::Db;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus, NouveauConsent};
 use crate::domain::ports::ecriture::{ConsentsWriteRepository, EcritureError};
+use crate::domain::ports::lecture::{ConsentsReadRepository, LectureError};
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
 };
@@ -65,6 +66,36 @@ impl SqlxConsentsRepository {
 
         Ok(Some(into_consent(crypto, row)?))
     }
+
+    pub async fn lister_actifs_par_proprietaire(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<Consent>, ChiffrementError> {
+        let rows = sqlx::query_as::<_, ConsentRow>(
+            "SELECT id, owner_id, external_ref, status, expires_at, created_at, updated_at \
+             FROM budgy.consent WHERE owner_id = $1 AND status = $2",
+        )
+        .bind(&proprietaire.0)
+        .bind(ConsentStatus::Active.as_str())
+        .fetch_all(&self.db)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| into_consent(crypto, row))
+            .collect()
+    }
+
+    pub async fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, ChiffrementError> {
+        let resultat = sqlx::query("DELETE FROM budgy.consent WHERE owner_id = $1")
+            .bind(&proprietaire.0)
+            .execute(&self.db)
+            .await?;
+        Ok(resultat.rows_affected())
+    }
 }
 
 #[derive(Clone)]
@@ -88,6 +119,28 @@ impl ConsentsWriteRepository for SqlxConsentsWriteAdapter {
             .insert(&self.crypto, nouveau)
             .await
             .map_err(vers_ecriture_error)
+    }
+
+    async fn supprimer_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        self.repo
+            .supprimer_par_proprietaire(proprietaire)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+}
+
+impl ConsentsReadRepository for SqlxConsentsWriteAdapter {
+    async fn lister_actifs_par_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<Consent>, LectureError> {
+        self.repo
+            .lister_actifs_par_proprietaire(&self.crypto, proprietaire)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
     }
 }
 

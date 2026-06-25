@@ -4,6 +4,7 @@ pub mod budget;
 pub mod categorie;
 pub mod compte;
 pub mod consent;
+pub mod effacement;
 pub mod ports;
 pub mod previsionnel;
 pub mod regle_categorisation;
