@@ -30,6 +30,7 @@ fn consent_actif(owner: &str) -> Consent {
         id: ConsentId(Uuid::new_v4()),
         proprietaire: ProprietaireId(owner.to_string()),
         external_ref: "session-ref".to_string(),
+        etablissement: None,
         status: ConsentStatus::Active,
         expires_at: None,
         created_at: maintenant,

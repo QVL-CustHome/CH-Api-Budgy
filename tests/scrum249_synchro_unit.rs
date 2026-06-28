@@ -332,6 +332,7 @@ fn consent_actif(maintenant: DateTime<Utc>) -> Consent {
         id: ConsentId(Uuid::new_v4()),
         proprietaire: ProprietaireId("owner-249".to_string()),
         external_ref: "ref-249".to_string(),
+        etablissement: None,
         status: ConsentStatus::Active,
         expires_at: Some(maintenant + Duration::days(30)),
         created_at: maintenant,

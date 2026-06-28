@@ -1,6 +1,12 @@
 use crate::domain::compte::ProprietaireId;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use uuid::Uuid;
+
+pub const MARGE_RENOUVELLEMENT_JOURS_DEFAUT: i64 = 7;
+
+pub fn marge_renouvellement_defaut() -> Duration {
+    Duration::days(MARGE_RENOUVELLEMENT_JOURS_DEFAUT)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsentId(pub Uuid);
@@ -12,6 +18,13 @@ pub enum ConsentStatus {
     Expired,
     Revoked,
     Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsentRenouvellement {
+    AJour,
+    RenouvellementRequis,
+    Expire,
 }
 
 impl ConsentStatus {
@@ -42,10 +55,37 @@ pub struct Consent {
     pub id: ConsentId,
     pub proprietaire: ProprietaireId,
     pub external_ref: String,
+    pub etablissement: Option<String>,
     pub status: ConsentStatus,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Consent {
+    pub fn renouvellement(
+        &self,
+        maintenant: DateTime<Utc>,
+        marge: Duration,
+    ) -> ConsentRenouvellement {
+        if matches!(self.status, ConsentStatus::Expired | ConsentStatus::Failed) {
+            return ConsentRenouvellement::Expire;
+        }
+        match self.expires_at {
+            Some(expiration) if expiration <= maintenant => ConsentRenouvellement::Expire,
+            Some(expiration) if expiration <= maintenant + marge => {
+                ConsentRenouvellement::RenouvellementRequis
+            }
+            _ => ConsentRenouvellement::AJour,
+        }
+    }
+
+    pub fn est_renouvelable(&self, maintenant: DateTime<Utc>, marge: Duration) -> bool {
+        !matches!(
+            self.renouvellement(maintenant, marge),
+            ConsentRenouvellement::AJour
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +101,7 @@ pub struct NouveauConsentInitie {
     pub id: ConsentId,
     pub proprietaire: ProprietaireId,
     pub external_ref: String,
+    pub etablissement: String,
     pub status: ConsentStatus,
     pub expires_at: Option<DateTime<Utc>>,
 }
