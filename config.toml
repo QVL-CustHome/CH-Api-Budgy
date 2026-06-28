@@ -13,6 +13,8 @@ enabled = false
 url = "mqtt://127.0.0.1:1883"
 client_id = "ch-api-budgy"
 topic_user_deleted = "auth/user/deleted"
+topic_prefix = "budgy"
+event_issuer = "ch-api-budgy"
 
 [worker_synchro]
 enabled = false
