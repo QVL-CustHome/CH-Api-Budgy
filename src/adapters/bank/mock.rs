@@ -1,8 +1,9 @@
 use crate::adapters::bank::determinisme::{horodatage_ancre, uuid_depuis};
 use crate::domain::balance::{Balance, BalanceId, BalanceType};
 use crate::domain::bank_account::{BankAccount, BankAccountId};
-use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
 use crate::domain::compte::ProprietaireId;
+use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
+use crate::domain::horloge::{Horloge, HorlogeSysteme};
 use crate::domain::ports::bank_data_source::{
     BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
     ReponseAutorisation,
@@ -11,20 +12,38 @@ use crate::domain::transaction_bancaire::{
     TransactionBancaire, TransactionBancaireId, TransactionStatus,
 };
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 const DEVISE: &str = "EUR";
+const DUREE_CONSENTEMENT_JOURS: i64 = 90;
 
-#[derive(Default)]
 pub struct MockBankDataSource {
     rejeux_par_compte: Mutex<HashMap<String, u32>>,
+    horloge: Arc<dyn Horloge>,
+}
+
+impl Default for MockBankDataSource {
+    fn default() -> Self {
+        Self::avec_horloge(Arc::new(HorlogeSysteme))
+    }
 }
 
 impl MockBankDataSource {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn avec_horloge(horloge: Arc<dyn Horloge>) -> Self {
+        Self {
+            rejeux_par_compte: Mutex::new(HashMap::new()),
+            horloge,
+        }
+    }
+
+    fn expiration_consentement(&self) -> DateTime<Utc> {
+        self.horloge.maintenant() + Duration::days(DUREE_CONSENTEMENT_JOURS)
     }
 
     fn lot_transactions(compte: &BankAccount, rejeu: u32) -> Vec<TransactionBancaire> {
@@ -107,8 +126,9 @@ impl BankDataSource for MockBankDataSource {
             id: demande.consent_id,
             proprietaire: demande.proprietaire,
             external_ref: format!("mock-auth-{}", demande.etablissement),
+            etablissement: Some(demande.etablissement.clone()),
             status: ConsentStatus::Pending,
-            expires_at: Some(horodatage + Duration::days(90)),
+            expires_at: Some(self.expiration_consentement()),
             created_at: horodatage,
             updated_at: horodatage,
         };
@@ -135,8 +155,9 @@ impl BankDataSource for MockBankDataSource {
             id: consent_id,
             proprietaire: proprietaire.clone(),
             external_ref: format!("mock-session-{}", reponse.reference_autorisation),
+            etablissement: None,
             status: ConsentStatus::Active,
-            expires_at: Some(horodatage + Duration::days(90)),
+            expires_at: Some(self.expiration_consentement()),
             created_at: horodatage,
             updated_at: horodatage,
         })

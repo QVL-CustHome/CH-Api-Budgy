@@ -261,7 +261,7 @@ impl SqlxBankAccountsRepository {
         let rows = sqlx::query_as::<_, CompteEcheantRow>(
             "SELECT a.id, a.owner_id, a.consent_id, a.external_account_id, a.currency, \
              a.sync_count_today, a.last_sync_day, \
-             c.external_ref, c.status, c.expires_at, c.created_at, c.updated_at \
+             c.external_ref, c.etablissement, c.status, c.expires_at, c.created_at, c.updated_at \
              FROM budgy.bank_account a \
              JOIN budgy.consent c ON c.id = a.consent_id \
              WHERE (a.next_sync_at IS NULL OR a.next_sync_at <= $1) \
@@ -483,6 +483,7 @@ type CompteEcheantRow = (
     i32,
     Option<NaiveDate>,
     Vec<u8>,
+    Option<String>,
     String,
     Option<DateTime<Utc>>,
     DateTime<Utc>,
@@ -502,6 +503,7 @@ fn into_compte_echeant(
         sync_count_today,
         last_sync_day,
         consent_external_ref_blob,
+        consent_etablissement,
         consent_status,
         consent_expires_at,
         consent_created_at,
@@ -538,6 +540,7 @@ fn into_compte_echeant(
         id: ConsentId(consent_id),
         proprietaire: ProprietaireId(owner_id),
         external_ref: consent_external_ref,
+        etablissement: consent_etablissement,
         status,
         expires_at: consent_expires_at,
         created_at: consent_created_at,

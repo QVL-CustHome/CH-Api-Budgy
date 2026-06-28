@@ -2,7 +2,10 @@ use crate::api::error::ApiError;
 use crate::api::response::ListResponse;
 use crate::domain::bank_account::NouveauBankAccount;
 use crate::domain::compte::ProprietaireId;
-use crate::domain::consent::{ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsentInitie};
+use crate::domain::consent::{
+    Consent, ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsentInitie,
+    marge_renouvellement_defaut,
+};
 use crate::domain::ports::bank_data_source::{
     BankDataSourceError, DemandeConsentement, ReponseAutorisation,
 };
@@ -11,11 +14,12 @@ use crate::domain::ports::lecture::{BankAccountsReadRepository, ConsentsReadRepo
 use crate::extract::BudgyUser;
 use crate::handlers::dto::{
     BankAccountDto, BankDto, ConsentCallbackRequest, ConsentCompletionDto, ConsentDto,
-    CreateConsentRequest, CreateConsentResponse,
+    CreateConsentRequest, CreateConsentResponse, RenewConsentResponse,
 };
 use crate::state::AppState;
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
+use chrono::Utc;
 use uuid::Uuid;
 
 pub async fn list_banks(
@@ -57,6 +61,7 @@ pub async fn create_consent(
             id: initie.consent.id.clone(),
             proprietaire,
             external_ref: initie.consent.external_ref.clone(),
+            etablissement: bank_id.to_string(),
             status: ConsentStatus::Pending,
             expires_at: initie.consent.expires_at,
         })
@@ -143,6 +148,49 @@ pub async fn complete_consent(
     }))
 }
 
+pub async fn renew_consent(
+    user: BudgyUser,
+    State(state): State<AppState>,
+    Path(consent_id): Path<Uuid>,
+) -> Result<Json<RenewConsentResponse>, ApiError> {
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
+    let consent_id = ConsentId(consent_id);
+
+    let consent = consent_renouvelable(&state, &proprietaire, &consent_id).await?;
+    let etablissement = consent
+        .etablissement
+        .clone()
+        .ok_or_else(|| ApiError::conflict("établissement du consentement indéterminé"))?;
+
+    let initie = state
+        .bank_source
+        .initier_consentement(DemandeConsentement {
+            consent_id: consent_id.clone(),
+            proprietaire: proprietaire.clone(),
+            etablissement,
+            url_retour: state.bank_callback_url.clone(),
+        })
+        .await?;
+
+    state
+        .consents
+        .mettre_a_jour(
+            &proprietaire,
+            &consent_id,
+            MiseAJourConsent {
+                status: ConsentStatus::Pending,
+                external_ref: initie.consent.external_ref.clone(),
+                expires_at: initie.consent.expires_at,
+            },
+        )
+        .await?;
+
+    Ok(Json(RenewConsentResponse {
+        consent_id: consent_id.0,
+        authorization_url: initie.url_autorisation,
+    }))
+}
+
 pub async fn list_consents(
     user: BudgyUser,
     State(state): State<AppState>,
@@ -150,8 +198,32 @@ pub async fn list_consents(
     let proprietaire = ProprietaireId(user.owner_id().to_string());
     let consents = state.consents.lister_par_proprietaire(&proprietaire).await?;
     let total = consents.len() as u64;
-    let data = consents.into_iter().map(ConsentDto::from).collect();
+    let maintenant = Utc::now();
+    let data = consents
+        .into_iter()
+        .map(|consent| ConsentDto::depuis(consent, maintenant, marge_renouvellement_defaut()))
+        .collect();
     Ok(Json(ListResponse::new(data, total)))
+}
+
+async fn consent_renouvelable(
+    state: &AppState,
+    proprietaire: &ProprietaireId,
+    consent_id: &ConsentId,
+) -> Result<Consent, ApiError> {
+    let consent = state
+        .consents
+        .fetch_pour_proprietaire(proprietaire, consent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("consentement introuvable"))?;
+
+    if !consent.est_renouvelable(Utc::now(), marge_renouvellement_defaut()) {
+        return Err(ApiError::conflict(
+            "consentement non éligible au renouvellement",
+        ));
+    }
+
+    Ok(consent)
 }
 
 async fn completion_existante(
