@@ -4,9 +4,8 @@ use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source}
 use ch_api_budgy::config::{self, ConfigError, EnableBankingConfig};
 use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
-use ch_api_budgy::repository::comptes::SqlxComptesRepository;
+use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
-use ch_api_budgy::repository::transactions::SqlxTransactionsRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::{Claims, JwtService, JwtValidationError};
 use ch_api_budgy::state::AppState;
@@ -223,10 +222,12 @@ fn test_state() -> AppState {
         .expect("pool lazy sans connexion pour la route /v1/me qui ne touche pas la base");
     let crypto = Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap());
     AppState {
-        comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
-        transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
         consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(db.clone(), crypto.clone())),
+        bank_transactions: Arc::new(SqlxBankTransactionsWriteAdapter::new(
+            db.clone(),
+            crypto.clone(),
+        )),
         bank_source: construire_source(SourceBancaire::Mock, &EnableBankingConfig::default()),
         bank_callback_url: "https://budgy.custhome.app/banque/callback".to_string(),
         db,

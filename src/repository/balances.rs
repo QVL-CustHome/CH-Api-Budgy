@@ -107,7 +107,7 @@ impl BalancesWriteRepository for SqlxBalancesWriteAdapter {
     }
 }
 
-type BalanceRow = (
+pub type BalanceRow = (
     Uuid,
     Uuid,
     String,
@@ -118,7 +118,7 @@ type BalanceRow = (
     DateTime<Utc>,
 );
 
-fn into_balance(crypto: &CryptoService, row: BalanceRow) -> Result<Balance, ChiffrementError> {
+pub fn into_balance(crypto: &CryptoService, row: BalanceRow) -> Result<Balance, ChiffrementError> {
     let (
         id,
         bank_account_id,

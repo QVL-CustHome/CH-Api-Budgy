@@ -1,32 +1,15 @@
-use crate::domain::bank_account::{BankAccount, CompteASynchroniser};
-use crate::domain::compte::{Compte, CompteId, ProprietaireId};
+use crate::domain::balance::Balance;
+use crate::domain::bank_account::{BankAccount, BankAccountId, CompteASynchroniser};
+use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
-use crate::domain::transaction::Transaction;
-use chrono::{DateTime, NaiveDate, Utc};
+use crate::domain::transaction_bancaire::TransactionBancaire;
+use chrono::{DateTime, Utc};
 use std::future::Future;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnerRef(pub String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tranche {
     pub limit: u32,
     pub offset: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct ListeComptesQuery {
-    pub owner: OwnerRef,
-    pub tranche: Tranche,
-}
-
-#[derive(Debug, Clone)]
-pub struct ListeTransactionsQuery {
-    pub owner: OwnerRef,
-    pub compte: Option<CompteId>,
-    pub depuis: Option<NaiveDate>,
-    pub jusqua: Option<NaiveDate>,
-    pub tranche: Tranche,
 }
 
 #[derive(Debug, Clone)]
@@ -39,26 +22,6 @@ pub struct LectureResultat<T> {
 pub enum LectureError {
     #[error("erreur d'accès aux données : {0}")]
     Acces(String),
-}
-
-pub trait ComptesReadRepository: Send + Sync {
-    fn lister(
-        &self,
-        query: ListeComptesQuery,
-    ) -> impl Future<Output = Result<LectureResultat<Compte>, LectureError>> + Send;
-
-    fn solde(
-        &self,
-        owner: &OwnerRef,
-        compte: &CompteId,
-    ) -> impl Future<Output = Result<Option<Compte>, LectureError>> + Send;
-}
-
-pub trait TransactionsReadRepository: Send + Sync {
-    fn lister(
-        &self,
-        query: ListeTransactionsQuery,
-    ) -> impl Future<Output = Result<LectureResultat<Transaction>, LectureError>> + Send;
 }
 
 pub trait ConsentsReadRepository: Send + Sync {
@@ -85,6 +48,41 @@ pub trait BankAccountsReadRepository: Send + Sync {
         proprietaire: &ProprietaireId,
         consent: &ConsentId,
     ) -> impl Future<Output = Result<Vec<BankAccount>, LectureError>> + Send;
+}
+
+#[derive(Debug, Clone)]
+pub struct CompteAvecSolde {
+    pub compte: BankAccount,
+    pub solde: Option<Balance>,
+}
+
+pub trait ComptesBancairesReadRepository: Send + Sync {
+    fn lister_avec_solde(
+        &self,
+        proprietaire: &ProprietaireId,
+        tranche: Tranche,
+    ) -> impl Future<Output = Result<LectureResultat<CompteAvecSolde>, LectureError>> + Send;
+
+    fn fetch_avec_solde(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> impl Future<Output = Result<Option<CompteAvecSolde>, LectureError>> + Send;
+
+    fn appartient_au_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> impl Future<Output = Result<bool, LectureError>> + Send;
+}
+
+pub trait TransactionsBancairesReadRepository: Send + Sync {
+    fn lister_par_compte(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        tranche: Tranche,
+    ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
 }
 
 #[derive(Debug, Clone)]
