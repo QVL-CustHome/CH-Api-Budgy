@@ -62,12 +62,13 @@ impl SqlxConsentsRepository {
             chiffrer_texte(crypto, owner, TABLE, FIELD_EXTERNAL_REF, &nouveau.external_ref)?;
 
         let id: Uuid = sqlx::query_scalar(
-            "INSERT INTO budgy.consent (id, owner_id, external_ref, status, expires_at, key_version) \
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+            "INSERT INTO budgy.consent (id, owner_id, external_ref, etablissement, status, expires_at, key_version) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
         )
         .bind(nouveau.id.0)
         .bind(owner)
         .bind(external_ref)
+        .bind(&nouveau.etablissement)
         .bind(nouveau.status.as_str())
         .bind(nouveau.expires_at)
         .bind(KEY_VERSION)
@@ -135,7 +136,7 @@ impl SqlxConsentsRepository {
         id: &ConsentId,
     ) -> Result<Option<Consent>, ChiffrementError> {
         let Some(row) = sqlx::query_as::<_, ConsentRow>(
-            "SELECT id, owner_id, external_ref, status, expires_at, created_at, updated_at \
+            "SELECT id, owner_id, external_ref, etablissement, status, expires_at, created_at, updated_at \
              FROM budgy.consent WHERE id = $1",
         )
         .bind(id.0)
@@ -155,7 +156,7 @@ impl SqlxConsentsRepository {
         id: &ConsentId,
     ) -> Result<Option<Consent>, ChiffrementError> {
         let Some(row) = sqlx::query_as::<_, ConsentRow>(
-            "SELECT id, owner_id, external_ref, status, expires_at, created_at, updated_at \
+            "SELECT id, owner_id, external_ref, etablissement, status, expires_at, created_at, updated_at \
              FROM budgy.consent WHERE id = $1 AND owner_id = $2",
         )
         .bind(id.0)
@@ -175,7 +176,7 @@ impl SqlxConsentsRepository {
         proprietaire: &ProprietaireId,
     ) -> Result<Vec<Consent>, ChiffrementError> {
         let rows = sqlx::query_as::<_, ConsentRow>(
-            "SELECT id, owner_id, external_ref, status, expires_at, created_at, updated_at \
+            "SELECT id, owner_id, external_ref, etablissement, status, expires_at, created_at, updated_at \
              FROM budgy.consent WHERE owner_id = $1 ORDER BY created_at DESC",
         )
         .bind(&proprietaire.0)
@@ -193,7 +194,7 @@ impl SqlxConsentsRepository {
         proprietaire: &ProprietaireId,
     ) -> Result<Vec<Consent>, ChiffrementError> {
         let rows = sqlx::query_as::<_, ConsentRow>(
-            "SELECT id, owner_id, external_ref, status, expires_at, created_at, updated_at \
+            "SELECT id, owner_id, external_ref, etablissement, status, expires_at, created_at, updated_at \
              FROM budgy.consent WHERE owner_id = $1 AND status = $2",
         )
         .bind(&proprietaire.0)
@@ -349,6 +350,7 @@ type ConsentRow = (
     Uuid,
     String,
     Vec<u8>,
+    Option<String>,
     String,
     Option<DateTime<Utc>>,
     DateTime<Utc>,
@@ -356,7 +358,8 @@ type ConsentRow = (
 );
 
 fn into_consent(crypto: &CryptoService, row: ConsentRow) -> Result<Consent, ChiffrementError> {
-    let (id, owner_id, external_ref_blob, status, expires_at, created_at, updated_at) = row;
+    let (id, owner_id, external_ref_blob, etablissement, status, expires_at, created_at, updated_at) =
+        row;
 
     let external_ref =
         dechiffrer_texte(crypto, &owner_id, TABLE, FIELD_EXTERNAL_REF, &external_ref_blob)?;
@@ -367,6 +370,7 @@ fn into_consent(crypto: &CryptoService, row: ConsentRow) -> Result<Consent, Chif
         id: ConsentId(id),
         proprietaire: ProprietaireId(owner_id),
         external_ref,
+        etablissement,
         status,
         expires_at,
         created_at,
