@@ -1,11 +1,11 @@
 use crate::api::money::Centimes;
 use crate::domain::balance::{Balance, BalanceType};
 use crate::domain::bank_account::BankAccount;
-use crate::domain::consent::{Consent, ConsentStatus};
+use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::CompteAvecSolde;
 use crate::domain::transaction_bancaire::{TransactionBancaire, TransactionStatus};
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -84,25 +84,54 @@ impl From<BankAccount> for BankAccountDto {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConsentRenewalDto {
+    UpToDate,
+    RenewalRequired,
+    Expired,
+}
+
+impl From<ConsentRenouvellement> for ConsentRenewalDto {
+    fn from(renouvellement: ConsentRenouvellement) -> Self {
+        match renouvellement {
+            ConsentRenouvellement::AJour => ConsentRenewalDto::UpToDate,
+            ConsentRenouvellement::RenouvellementRequis => ConsentRenewalDto::RenewalRequired,
+            ConsentRenouvellement::Expire => ConsentRenewalDto::Expired,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsentDto {
     pub consent_id: Uuid,
     pub status: ConsentStatusDto,
+    pub renewal: ConsentRenewalDto,
+    pub renewable: bool,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<Consent> for ConsentDto {
-    fn from(consent: Consent) -> Self {
+impl ConsentDto {
+    pub fn depuis(consent: Consent, maintenant: DateTime<Utc>, marge: Duration) -> Self {
+        let renouvellement = consent.renouvellement(maintenant, marge);
         Self {
             consent_id: consent.id.0,
             status: consent.status.into(),
+            renewal: renouvellement.into(),
+            renewable: !matches!(renouvellement, ConsentRenouvellement::AJour),
             expires_at: consent.expires_at,
             created_at: consent.created_at,
             updated_at: consent.updated_at,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RenewConsentResponse {
+    pub consent_id: Uuid,
+    pub authorization_url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

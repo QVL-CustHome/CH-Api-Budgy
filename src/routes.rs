@@ -37,4 +37,8 @@ fn public_routes() -> Router<AppState> {
             "/consents/callback",
             post(handlers::banques::complete_consent),
         )
+        .route(
+            "/consents/{consent_id}/renew",
+            post(handlers::banques::renew_consent),
+        )
 }

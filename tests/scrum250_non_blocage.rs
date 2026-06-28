@@ -235,6 +235,7 @@ fn consent_actif(expire_dans: Duration) -> Consent {
         id: ConsentId(Uuid::new_v4()),
         proprietaire: ProprietaireId("owner-250".to_string()),
         external_ref: "ref-250".to_string(),
+        etablissement: None,
         status: ConsentStatus::Active,
         expires_at: Some(base + expire_dans),
         created_at: base,

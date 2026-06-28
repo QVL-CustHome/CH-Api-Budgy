@@ -1,19 +1,38 @@
 use ch_api_budgy::adapters::bank::mock::MockBankDataSource;
 use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::consent::{Consent, ConsentId};
+use ch_api_budgy::domain::horloge::Horloge;
 use ch_api_budgy::domain::ports::bank_data_source::{
     BankDataSource, DemandeConsentement, ReponseAutorisation,
 };
 use ch_api_budgy::domain::transaction_bancaire::{TransactionStatus, dedup_key};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 const OWNER: &str = "owner-scrum-245";
 const ETABLISSEMENT: &str = "banque-demo";
 
+struct HorlogeFixe(DateTime<Utc>);
+
+impl Horloge for HorlogeFixe {
+    fn maintenant(&self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+fn horloge_fixe() -> Arc<dyn Horloge> {
+    Arc::new(HorlogeFixe(
+        Utc.with_ymd_and_hms(2026, 6, 1, 0, 0, 0).unwrap(),
+    ))
+}
+
 fn mock() -> Arc<dyn BankDataSource> {
     Arc::new(MockBankDataSource::new())
+}
+
+fn mock_avec_horloge(horloge: Arc<dyn Horloge>) -> Arc<dyn BankDataSource> {
+    Arc::new(MockBankDataSource::avec_horloge(horloge))
 }
 
 async fn consentement_actif(source: &Arc<dyn BankDataSource>) -> Consent {
@@ -62,8 +81,8 @@ async fn la_bascule_par_configuration_fournit_le_mock() {
 
 #[tokio::test]
 async fn le_mock_est_deterministe() {
-    let premiere = mock();
-    let seconde = mock();
+    let premiere = mock_avec_horloge(horloge_fixe());
+    let seconde = mock_avec_horloge(horloge_fixe());
 
     let consent_a = consentement_actif(&premiere).await;
     let consent_b = consentement_actif(&seconde).await;
