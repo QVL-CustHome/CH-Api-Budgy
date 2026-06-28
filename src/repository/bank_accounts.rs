@@ -1,5 +1,6 @@
 use crate::crypto::CryptoService;
 use crate::db::Db;
+use crate::domain::balance::Balance;
 use crate::domain::bank_account::{
     BankAccount, BankAccountId, CompteASynchroniser, NouveauBankAccount, PlanificationSynchro,
     dedup_key, masquer_iban,
@@ -10,8 +11,10 @@ use crate::domain::ports::ecriture::{
     BankAccountsWriteRepository, EcritureError, PlanificationSynchroWriteRepository,
 };
 use crate::domain::ports::lecture::{
-    BankAccountsReadRepository, CompteEcheant, LectureError, PlanificationSynchroReadRepository,
+    BankAccountsReadRepository, CompteAvecSolde, CompteEcheant, ComptesBancairesReadRepository,
+    LectureError, LectureResultat, PlanificationSynchroReadRepository, Tranche,
 };
+use crate::repository::balances::{BalanceRow, into_balance};
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_texte, dechiffrer_texte, vers_ecriture_error,
 };
@@ -135,6 +138,108 @@ impl SqlxBankAccountsRepository {
             .collect()
     }
 
+    pub async fn lister_avec_solde(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<CompteAvecSolde>, ChiffrementError> {
+        let total: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM budgy.bank_account WHERE owner_id = $1")
+                .bind(&proprietaire.0)
+                .fetch_one(&self.db)
+                .await?;
+
+        let rows = sqlx::query_as::<_, BankAccountRow>(
+            "SELECT id, owner_id, consent_id, external_account_id, iban_masked, currency, \
+             next_sync_at, sync_count_today, created_at, updated_at \
+             FROM budgy.bank_account WHERE owner_id = $1 \
+             ORDER BY created_at ASC LIMIT $2 OFFSET $3",
+        )
+        .bind(&proprietaire.0)
+        .bind(i64::from(tranche.limit))
+        .bind(i64::from(tranche.offset))
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut elements = Vec::with_capacity(rows.len());
+        for row in rows {
+            let compte = into_bank_account(crypto, row)?;
+            let solde = self.solde_courant(crypto, &compte.id).await?;
+            elements.push(CompteAvecSolde { compte, solde });
+        }
+
+        Ok(LectureResultat {
+            elements,
+            total: total.max(0) as u64,
+        })
+    }
+
+    pub async fn fetch_avec_solde(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> Result<Option<CompteAvecSolde>, ChiffrementError> {
+        let Some(row) = sqlx::query_as::<_, BankAccountRow>(
+            "SELECT id, owner_id, consent_id, external_account_id, iban_masked, currency, \
+             next_sync_at, sync_count_today, created_at, updated_at \
+             FROM budgy.bank_account WHERE id = $1 AND owner_id = $2",
+        )
+        .bind(compte.0)
+        .bind(&proprietaire.0)
+        .fetch_optional(&self.db)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let compte = into_bank_account(crypto, row)?;
+        let solde = self.solde_courant(crypto, &compte.id).await?;
+        Ok(Some(CompteAvecSolde { compte, solde }))
+    }
+
+    pub async fn appartient_au_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> Result<bool, ChiffrementError> {
+        let existe: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM budgy.bank_account WHERE id = $1 AND owner_id = $2",
+        )
+        .bind(compte.0)
+        .bind(&proprietaire.0)
+        .fetch_optional(&self.db)
+        .await?;
+        Ok(existe.is_some())
+    }
+
+    async fn solde_courant(
+        &self,
+        crypto: &CryptoService,
+        compte: &BankAccountId,
+    ) -> Result<Option<Balance>, ChiffrementError> {
+        let row = sqlx::query_as::<_, BalanceRow>(
+            "SELECT b.id, b.bank_account_id, a.owner_id, b.balance_type, b.amount_cents, \
+             b.currency, b.reference_date, b.created_at \
+             FROM budgy.balance b \
+             JOIN budgy.bank_account a ON a.id = b.bank_account_id \
+             WHERE b.bank_account_id = $1 \
+             ORDER BY (b.balance_type = 'booked') DESC, \
+             (b.balance_type = 'available') DESC, \
+             b.reference_date DESC, b.created_at DESC \
+             LIMIT 1",
+        )
+        .bind(compte.0)
+        .fetch_optional(&self.db)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Some(into_balance(crypto, row)?)),
+            None => Ok(None),
+        }
+    }
+
     pub async fn supprimer_par_proprietaire(
         &self,
         proprietaire: &ProprietaireId,
@@ -250,6 +355,41 @@ impl BankAccountsReadRepository for SqlxBankAccountsWriteAdapter {
     ) -> Result<Vec<BankAccount>, LectureError> {
         self.repo
             .lister_par_consent(&self.crypto, proprietaire, consent)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+}
+
+impl ComptesBancairesReadRepository for SqlxBankAccountsWriteAdapter {
+    async fn lister_avec_solde(
+        &self,
+        proprietaire: &ProprietaireId,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<CompteAvecSolde>, LectureError> {
+        self.repo
+            .lister_avec_solde(&self.crypto, proprietaire, tranche)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+
+    async fn fetch_avec_solde(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> Result<Option<CompteAvecSolde>, LectureError> {
+        self.repo
+            .fetch_avec_solde(&self.crypto, proprietaire, compte)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+
+    async fn appartient_au_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+    ) -> Result<bool, LectureError> {
+        self.repo
+            .appartient_au_proprietaire(proprietaire, compte)
             .await
             .map_err(|e| LectureError::Acces(e.to_string()))
     }

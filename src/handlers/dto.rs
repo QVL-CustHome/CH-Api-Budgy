@@ -1,107 +1,13 @@
 use crate::api::money::Centimes;
+use crate::domain::balance::{Balance, BalanceType};
 use crate::domain::bank_account::BankAccount;
-use crate::domain::compte::Compte;
 use crate::domain::consent::{Consent, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
-use crate::domain::transaction::{SensTransaction, Transaction};
+use crate::domain::ports::lecture::CompteAvecSolde;
+use crate::domain::transaction_bancaire::{TransactionBancaire, TransactionStatus};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AccountDto {
-    pub id: Uuid,
-    pub label: String,
-    pub institution: String,
-    pub iban: Option<String>,
-    pub currency: String,
-    pub balance_cents: Centimes,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<Compte> for AccountDto {
-    fn from(compte: Compte) -> Self {
-        Self {
-            id: compte.id.0,
-            label: compte.libelle,
-            institution: compte.etablissement,
-            iban: compte.iban,
-            currency: compte.devise,
-            balance_cents: Centimes(compte.solde_centimes),
-            created_at: compte.cree_le,
-            updated_at: compte.mis_a_jour_le,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AccountBalanceDto {
-    pub account_id: Uuid,
-    pub currency: String,
-    pub balance_cents: Centimes,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<Compte> for AccountBalanceDto {
-    fn from(compte: Compte) -> Self {
-        Self {
-            account_id: compte.id.0,
-            currency: compte.devise,
-            balance_cents: Centimes(compte.solde_centimes),
-            updated_at: compte.mis_a_jour_le,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TransactionDirection {
-    Debit,
-    Credit,
-}
-
-impl From<SensTransaction> for TransactionDirection {
-    fn from(sens: SensTransaction) -> Self {
-        match sens {
-            SensTransaction::Debit => TransactionDirection::Debit,
-            SensTransaction::Credit => TransactionDirection::Credit,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TransactionDto {
-    pub id: Uuid,
-    pub account_id: Uuid,
-    pub label: String,
-    pub amount_cents: Centimes,
-    pub direction: TransactionDirection,
-    pub currency: String,
-    pub operation_date: NaiveDate,
-    pub value_date: Option<NaiveDate>,
-    pub category_id: Option<Uuid>,
-    pub external_reference: Option<String>,
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<Transaction> for TransactionDto {
-    fn from(transaction: Transaction) -> Self {
-        Self {
-            id: transaction.id.0,
-            account_id: transaction.compte.0,
-            label: transaction.libelle,
-            amount_cents: Centimes(transaction.montant_centimes),
-            direction: transaction.sens.into(),
-            currency: transaction.devise,
-            operation_date: transaction.date_operation,
-            value_date: transaction.date_valeur,
-            category_id: transaction.categorie.map(|c| c.0),
-            external_reference: transaction.reference_externe,
-            created_at: transaction.cree_le,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BankDto {
@@ -204,4 +110,100 @@ pub struct ConsentCompletionDto {
     pub consent_id: Uuid,
     pub status: ConsentStatusDto,
     pub comptes: Vec<BankAccountDto>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BalanceTypeDto {
+    Available,
+    Booked,
+    Expected,
+}
+
+impl From<BalanceType> for BalanceTypeDto {
+    fn from(balance_type: BalanceType) -> Self {
+        match balance_type {
+            BalanceType::Available => BalanceTypeDto::Available,
+            BalanceType::Booked => BalanceTypeDto::Booked,
+            BalanceType::Expected => BalanceTypeDto::Expected,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BalanceDto {
+    pub amount_cents: Centimes,
+    #[serde(rename = "type")]
+    pub balance_type: BalanceTypeDto,
+    pub at: DateTime<Utc>,
+}
+
+impl From<Balance> for BalanceDto {
+    fn from(balance: Balance) -> Self {
+        Self {
+            amount_cents: Centimes(balance.amount_cents),
+            balance_type: balance.balance_type.into(),
+            at: balance.reference_date,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BankAccountSummaryDto {
+    pub id: Uuid,
+    pub iban_masked: String,
+    pub currency: String,
+    pub balance: Option<BalanceDto>,
+}
+
+impl From<CompteAvecSolde> for BankAccountSummaryDto {
+    fn from(item: CompteAvecSolde) -> Self {
+        Self {
+            id: item.compte.id.0,
+            iban_masked: item.compte.iban_masked,
+            currency: item.compte.currency,
+            balance: item.solde.map(BalanceDto::from),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionStatusDto {
+    Booked,
+    Pending,
+}
+
+impl From<TransactionStatus> for TransactionStatusDto {
+    fn from(status: TransactionStatus) -> Self {
+        match status {
+            TransactionStatus::Booked => TransactionStatusDto::Booked,
+            TransactionStatus::Pending => TransactionStatusDto::Pending,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BankTransactionDto {
+    pub id: Uuid,
+    pub label: String,
+    pub amount_cents: Centimes,
+    pub currency: String,
+    pub status: TransactionStatusDto,
+    pub booking_date: Option<NaiveDate>,
+    pub value_date: Option<NaiveDate>,
+}
+
+impl From<TransactionBancaire> for BankTransactionDto {
+    fn from(transaction: TransactionBancaire) -> Self {
+        Self {
+            id: transaction.id.0,
+            label: transaction.label,
+            amount_cents: Centimes(transaction.amount_cents),
+            currency: transaction.currency,
+            status: transaction.status.into(),
+            booking_date: transaction.booking_date,
+            value_date: transaction.value_date,
+        }
+    }
 }

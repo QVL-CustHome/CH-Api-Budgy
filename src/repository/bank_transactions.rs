@@ -1,8 +1,12 @@
 use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
+};
+use crate::domain::ports::lecture::{
+    LectureError, LectureResultat, Tranche, TransactionsBancairesReadRepository,
 };
 use crate::domain::transaction_bancaire::{
     NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
@@ -102,6 +106,51 @@ impl SqlxBankTransactionsRepository {
         Ok(Some(into_transaction(crypto, row)?))
     }
 
+    pub async fn lister_par_compte(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<TransactionBancaire>, ChiffrementError> {
+        let total: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE t.bank_account_id = $1 AND a.owner_id = $2",
+        )
+        .bind(compte.0)
+        .bind(&proprietaire.0)
+        .fetch_one(&self.db)
+        .await?;
+
+        let rows = sqlx::query_as::<_, BankTransactionRow>(
+            "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
+             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, t.created_at \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE t.bank_account_id = $1 AND a.owner_id = $2 \
+             ORDER BY t.booking_date DESC NULLS FIRST, t.value_date DESC NULLS LAST, \
+             t.created_at DESC \
+             LIMIT $3 OFFSET $4",
+        )
+        .bind(compte.0)
+        .bind(&proprietaire.0)
+        .bind(i64::from(tranche.limit))
+        .bind(i64::from(tranche.offset))
+        .fetch_all(&self.db)
+        .await?;
+
+        let elements = rows
+            .into_iter()
+            .map(|row| into_transaction(crypto, row))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(LectureResultat {
+            elements,
+            total: total.max(0) as u64,
+        })
+    }
+
     async fn owner_du_compte(
         &self,
         bank_account: &BankAccountId,
@@ -139,6 +188,20 @@ impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
             .insert(&self.crypto, nouvelle)
             .await
             .map_err(vers_ecriture_error)
+    }
+}
+
+impl TransactionsBancairesReadRepository for SqlxBankTransactionsWriteAdapter {
+    async fn lister_par_compte(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<TransactionBancaire>, LectureError> {
+        self.repo
+            .lister_par_compte(&self.crypto, proprietaire, compte, tranche)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
     }
 }
 

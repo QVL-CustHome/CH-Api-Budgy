@@ -44,18 +44,19 @@ Query params `limit` et `offset`.
 ### Montants et dates
 
 - Montants en entier de centimes (`*_cents`), jamais en flottant.
-- Dates et horodatages en ISO 8601 (`operation_date` en `YYYY-MM-DD`, `created_at` / `updated_at` en RFC 3339 UTC).
+- Dates et horodatages en ISO 8601 (`booking_date` / `value_date` en `YYYY-MM-DD`, `at` en RFC 3339 UTC).
 
-### Filtrage et tri
+### Pagination
 
-Query params réutilisables : `from`, `to` (dates ISO), `account_id` (UUID).
-`from` doit être antérieur ou égal à `to`, sinon `400 bad_request`.
-Le filtre catégorie (`category_id`) sera ajouté en Sprint 2 quand l'endpoint le portera réellement.
+Query params réutilisables : `limit` (défaut 50, max 200), `offset` (défaut 0).
+`limit=0` ou `limit > 200` renvoie `400 bad_request`.
 
 ### Endpoints de lecture (Sprint 1)
 
-- `GET /v1/accounts` — liste paginée des comptes (`AccountDto`).
-- `GET /v1/accounts/{account_id}/balance` — solde d'un compte (`AccountBalanceDto`).
-- `GET /v1/transactions` — liste paginée des transactions (`TransactionDto`), filtrable par `account_id`, `from`, `to`.
+Comptes bancaires chiffrés (IBAN, libellés et montants déchiffrés côté back avant exposition ; IBAN jamais exposé en clair). Périmètre filtré par le `sub` du JWT (anti-IDOR).
+
+- `GET /v1/accounts` — liste paginée des comptes du `sub` avec leur solde courant : `{ data: [ { id, iban_masked, currency, balance: { amount_cents, type, at } } ], total }`.
+- `GET /v1/accounts/{account_id}` — détail d'un compte (même forme qu'un élément de la liste) ; `404 not_found` si le compte n'appartient pas au `sub`.
+- `GET /v1/accounts/{account_id}/transactions` — transactions paginées du compte, triées par date décroissante : `{ data: [ { id, label, amount_cents, currency, status, booking_date, value_date } ], total }` ; `404 not_found` si le compte n'appartient pas au `sub`.
 
 Les catégories (S2) et budgets/agrégats (S3) réutiliseront ces mêmes primitives.
