@@ -60,6 +60,7 @@ fn ca06_debug_des_secrets_ne_revele_pas_la_cle() {
             encryption_key: TEST_KEY.to_vec(),
             jwt_secret: "secret-de-test-jwt-suffisamment-long-32o!".to_string(),
             relay_token: None,
+            relay_jwt_private_key: None,
         },
     };
 

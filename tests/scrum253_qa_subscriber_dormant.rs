@@ -24,6 +24,7 @@ fn config_dormante_vers_broker_mort() -> RelayConfig {
         url: "mqtt://127.0.0.1:1".to_string(),
         client_id: "ch-api-budgy-test".to_string(),
         topic_user_deleted: "auth/user/deleted".to_string(),
+        ..RelayConfig::default()
     }
 }
 
@@ -66,6 +67,7 @@ async fn relay_actif_avec_url_invalide_echoue_proprement_sans_panique() {
         url: "url-sans-schema".to_string(),
         client_id: "ch-api-budgy-test".to_string(),
         topic_user_deleted: "auth/user/deleted".to_string(),
+        ..RelayConfig::default()
     };
 
     let resultat = AbonneRelay::demarrer(&config, None, handler);

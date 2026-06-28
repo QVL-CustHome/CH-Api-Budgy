@@ -2,6 +2,7 @@ use crate::domain::balance::{Balance, NouvelleBalance};
 use crate::domain::bank_account::{
     BankAccount, BankAccountId, CompteASynchroniser, PlanificationSynchro,
 };
+use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
 use crate::domain::horloge::Horloge;
 use crate::domain::ports::bank_data_source::{BankDataSource, BankDataSourceError};
@@ -9,6 +10,7 @@ use crate::domain::ports::ecriture::{
     BalancesWriteRepository, BankTransactionsWriteRepository, ConsentsStatutWriteRepository,
     EcritureError, PlanificationSynchroWriteRepository, ResultatInsertion,
 };
+use crate::domain::ports::evenement_synchro::{EvenementSynchro, EventPublisher};
 use crate::domain::ports::lecture::{
     CompteEcheant, LectureError, PlanificationSynchroReadRepository,
 };
@@ -42,6 +44,7 @@ pub struct ParametresSynchro {
     pub quota_journalier: i32,
     pub intervalle: Duration,
     pub fenetre_transactions: Duration,
+    pub marge_renouvellement: Duration,
 }
 
 impl Default for ParametresSynchro {
@@ -50,11 +53,18 @@ impl Default for ParametresSynchro {
             quota_journalier: QUOTA_JOURNALIER_DEFAUT,
             intervalle: Duration::hours(6),
             fenetre_transactions: Duration::days(30),
+            marge_renouvellement: Duration::days(7),
         }
     }
 }
 
-pub struct DependancesSynchro<R, W, S, B, T, C, H>
+#[derive(Debug, Clone, Copy, Default)]
+struct RemonteeCompte {
+    transactions_inserees: u64,
+    solde_mis_a_jour: bool,
+}
+
+pub struct DependancesSynchro<R, W, S, B, T, C, H, P>
 where
     R: PlanificationSynchroReadRepository,
     W: PlanificationSynchroWriteRepository,
@@ -63,6 +73,7 @@ where
     T: BankTransactionsWriteRepository,
     C: ConsentsStatutWriteRepository,
     H: Horloge,
+    P: EventPublisher + ?Sized,
 {
     pub planification_lecture: R,
     pub planification_ecriture: W,
@@ -71,9 +82,10 @@ where
     pub transactions: T,
     pub consents_statut: C,
     pub horloge: H,
+    pub publisher: Arc<P>,
 }
 
-pub struct SynchroComptes<R, W, S, B, T, C, H>
+pub struct SynchroComptes<R, W, S, B, T, C, H, P>
 where
     R: PlanificationSynchroReadRepository,
     W: PlanificationSynchroWriteRepository,
@@ -82,6 +94,7 @@ where
     T: BankTransactionsWriteRepository,
     C: ConsentsStatutWriteRepository,
     H: Horloge,
+    P: EventPublisher + ?Sized,
 {
     planification_lecture: R,
     planification_ecriture: W,
@@ -90,10 +103,11 @@ where
     transactions: T,
     consents_statut: C,
     horloge: H,
+    publisher: Arc<P>,
     parametres: ParametresSynchro,
 }
 
-impl<R, W, S, B, T, C, H> SynchroComptes<R, W, S, B, T, C, H>
+impl<R, W, S, B, T, C, H, P> SynchroComptes<R, W, S, B, T, C, H, P>
 where
     R: PlanificationSynchroReadRepository,
     W: PlanificationSynchroWriteRepository,
@@ -102,9 +116,10 @@ where
     T: BankTransactionsWriteRepository,
     C: ConsentsStatutWriteRepository,
     H: Horloge,
+    P: EventPublisher + ?Sized,
 {
     pub fn new(
-        dependances: DependancesSynchro<R, W, S, B, T, C, H>,
+        dependances: DependancesSynchro<R, W, S, B, T, C, H, P>,
         parametres: ParametresSynchro,
     ) -> Self {
         let DependancesSynchro {
@@ -115,6 +130,7 @@ where
             transactions,
             consents_statut,
             horloge,
+            publisher,
         } = dependances;
         Self {
             planification_lecture,
@@ -124,6 +140,7 @@ where
             transactions,
             consents_statut,
             horloge,
+            publisher,
             parametres,
         }
     }
@@ -152,12 +169,16 @@ where
         rapport: &mut RapportSynchro,
     ) -> Result<(), SynchroError> {
         let CompteEcheant { compte, consent } = echeant;
+        let proprietaire = compte.proprietaire.clone();
+        let reference_compte = compte.id.0.to_string();
 
         if consentement_expire(&consent, maintenant) {
             self.consents_statut
                 .marquer_statut(&consent.id, ConsentStatus::Expired)
                 .await?;
             rapport.consentements_expires += 1;
+            self.publier(EvenementSynchro::consent_expired(proprietaire, maintenant))
+                .await;
             return Ok(());
         }
 
@@ -171,15 +192,41 @@ where
             return Ok(());
         }
 
-        let vue = vue_bank_account(&compte, maintenant);
-        if let Err(erreur) = self.remonter_donnees(&consent, &vue, rapport).await {
-            self.traiter_echec_source(&consent.id, &erreur, rapport)
-                .await?;
-            return Ok(());
+        self.publier(EvenementSynchro::sync_started(
+            proprietaire.clone(),
+            reference_compte.clone(),
+            maintenant,
+        ))
+        .await;
+
+        if renouvellement_requis(&consent, maintenant, self.parametres.marge_renouvellement) {
+            self.publier(EvenementSynchro::consent_renewal_required(
+                proprietaire.clone(),
+                maintenant,
+            ))
+            .await;
         }
 
-        rapport.comptes_synchronises += 1;
-        Ok(())
+        let vue = vue_bank_account(&compte, maintenant);
+        match self.remonter_donnees(&consent, &vue, rapport).await {
+            Ok(remontee) => {
+                self.publier_succes(&proprietaire, &reference_compte, &remontee, maintenant)
+                    .await;
+                rapport.comptes_synchronises += 1;
+                Ok(())
+            }
+            Err(erreur) => {
+                self.publier(EvenementSynchro::sync_failed(
+                    proprietaire.clone(),
+                    reference_compte,
+                    maintenant,
+                ))
+                .await;
+                self.traiter_echec_source(&proprietaire, &consent.id, &erreur, maintenant, rapport)
+                    .await?;
+                Ok(())
+            }
+        }
     }
 
     async fn remonter_donnees(
@@ -187,8 +234,9 @@ where
         consent: &Consent,
         compte: &BankAccount,
         rapport: &mut RapportSynchro,
-    ) -> Result<(), BankDataSourceError> {
+    ) -> Result<RemonteeCompte, BankDataSourceError> {
         let depuis = self.depuis_pour(compte);
+        let mut remontee = RemonteeCompte::default();
 
         let soldes = self.source_bancaire.solde(consent, compte).await?;
         for solde in soldes {
@@ -199,6 +247,7 @@ where
                 .is_ok()
             {
                 rapport.soldes_enregistres += 1;
+                remontee.solde_mis_a_jour = true;
             }
         }
 
@@ -212,7 +261,10 @@ where
                 .enregistrer(vers_nouvelle_transaction(&compte.id, transaction))
                 .await
             {
-                Ok(ResultatInsertion::Inseree(_)) => rapport.transactions_inserees += 1,
+                Ok(ResultatInsertion::Inseree(_)) => {
+                    rapport.transactions_inserees += 1;
+                    remontee.transactions_inserees += 1;
+                }
                 Ok(ResultatInsertion::Doublon) => rapport.transactions_doublons += 1,
                 Err(erreur) => {
                     tracing::warn!(cause = %erreur, "persistance d'une transaction ignorée");
@@ -220,13 +272,46 @@ where
             }
         }
 
-        Ok(())
+        Ok(remontee)
+    }
+
+    async fn publier_succes(
+        &self,
+        proprietaire: &ProprietaireId,
+        reference_compte: &str,
+        remontee: &RemonteeCompte,
+        maintenant: DateTime<Utc>,
+    ) {
+        if remontee.solde_mis_a_jour {
+            self.publier(EvenementSynchro::balance_updated(
+                proprietaire.clone(),
+                reference_compte.to_string(),
+                maintenant,
+            ))
+            .await;
+        }
+        self.publier(EvenementSynchro::account_transactions(
+            proprietaire.clone(),
+            reference_compte.to_string(),
+            remontee.transactions_inserees,
+            maintenant,
+        ))
+        .await;
+        self.publier(EvenementSynchro::sync_succeeded(
+            proprietaire.clone(),
+            reference_compte.to_string(),
+            remontee.transactions_inserees,
+            maintenant,
+        ))
+        .await;
     }
 
     async fn traiter_echec_source(
         &self,
+        proprietaire: &ProprietaireId,
         consent: &ConsentId,
         erreur: &BankDataSourceError,
+        maintenant: DateTime<Utc>,
         rapport: &mut RapportSynchro,
     ) -> Result<(), SynchroError> {
         if let BankDataSourceError::ConsentementInvalide = erreur {
@@ -234,10 +319,19 @@ where
                 .marquer_statut(consent, ConsentStatus::Expired)
                 .await?;
             rapport.consentements_expires += 1;
+            self.publier(EvenementSynchro::consent_expired(
+                proprietaire.clone(),
+                maintenant,
+            ))
+            .await;
         } else {
             tracing::warn!(cause = %erreur, "remontée bancaire en échec, créneau déjà réservé");
         }
         Ok(())
+    }
+
+    async fn publier(&self, evenement: EvenementSynchro) {
+        self.publisher.publier(evenement).await;
     }
 
     fn plan_apres_synchro(&self, maintenant: DateTime<Utc>) -> PlanificationSynchro {
@@ -259,6 +353,13 @@ fn consentement_expire(consent: &Consent, maintenant: DateTime<Utc>) -> bool {
         return true;
     }
     matches!(consent.expires_at, Some(expiration) if expiration <= maintenant)
+}
+
+fn renouvellement_requis(consent: &Consent, maintenant: DateTime<Utc>, marge: Duration) -> bool {
+    matches!(
+        consent.expires_at,
+        Some(expiration) if expiration > maintenant && expiration <= maintenant + marge
+    )
 }
 
 fn vue_bank_account(compte: &CompteASynchroniser, maintenant: DateTime<Utc>) -> BankAccount {

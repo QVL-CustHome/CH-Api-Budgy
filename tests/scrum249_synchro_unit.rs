@@ -14,6 +14,7 @@ use ch_api_budgy::domain::ports::ecriture::{
     BalancesWriteRepository, BankTransactionsWriteRepository, ConsentsStatutWriteRepository,
     EcritureError, PlanificationSynchroWriteRepository, ResultatInsertion,
 };
+use ch_api_budgy::domain::ports::evenement_synchro::NoopEventPublisher;
 use ch_api_budgy::domain::ports::lecture::{
     CompteEcheant, LectureError, PlanificationSynchroReadRepository,
 };
@@ -374,6 +375,7 @@ type Service = SynchroComptes<
     TransactionsMemoire,
     ConsentsStatutMemoire,
     HorlogeFixe,
+    NoopEventPublisher,
 >;
 
 struct Banc {
@@ -415,6 +417,7 @@ fn monter_avec_source(
         transactions: transactions.clone(),
         consents_statut: consents.clone(),
         horloge: horloge.clone(),
+        publisher: Arc::new(NoopEventPublisher),
     };
     let service = SynchroComptes::new(dependances, parametres);
     Banc {

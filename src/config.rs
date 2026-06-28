@@ -72,6 +72,10 @@ pub struct RelayConfig {
     pub client_id: String,
     #[serde(default = "default_relay_topic_user_deleted")]
     pub topic_user_deleted: String,
+    #[serde(default = "default_relay_topic_prefix")]
+    pub topic_prefix: String,
+    #[serde(default = "default_relay_event_issuer")]
+    pub event_issuer: String,
 }
 
 impl Default for RelayConfig {
@@ -81,6 +85,8 @@ impl Default for RelayConfig {
             url: default_relay_url(),
             client_id: default_relay_client_id(),
             topic_user_deleted: default_relay_topic_user_deleted(),
+            topic_prefix: default_relay_topic_prefix(),
+            event_issuer: default_relay_event_issuer(),
         }
     }
 }
@@ -174,6 +180,7 @@ pub struct Secrets {
     pub encryption_key: Vec<u8>,
     pub jwt_secret: String,
     pub relay_token: Option<String>,
+    pub relay_jwt_private_key: Option<String>,
 }
 
 impl std::fmt::Debug for Secrets {
@@ -222,6 +229,7 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         encryption_key: decode_encryption_key(&require("BUDGY_ENCRYPTION_KEY")?)?,
         jwt_secret: require("JWT_SECRET")?,
         relay_token: optional("RELAY_SERVICE_TOKEN"),
+        relay_jwt_private_key: optional("RELAY_JWT_PRIVATE_KEY"),
     };
     validate_secrets(&secrets)?;
 
@@ -293,6 +301,12 @@ fn appliquer_overrides_relay(relay: &mut RelayConfig) {
     if let Some(topic) = optional("RELAY_TOPIC_USER_DELETED") {
         relay.topic_user_deleted = topic;
     }
+    if let Some(prefix) = optional("RELAY_TOPIC_PREFIX") {
+        relay.topic_prefix = prefix;
+    }
+    if let Some(issuer) = optional("RELAY_EVENT_ISSUER") {
+        relay.event_issuer = issuer;
+    }
 }
 
 fn appliquer_overrides_worker(worker: &mut WorkerSynchroSettings) {
@@ -346,6 +360,14 @@ fn default_relay_client_id() -> String {
 
 fn default_relay_topic_user_deleted() -> String {
     "auth/user/deleted".to_string()
+}
+
+fn default_relay_topic_prefix() -> String {
+    "budgy".to_string()
+}
+
+fn default_relay_event_issuer() -> String {
+    "ch-api-budgy".to_string()
 }
 
 fn default_enable_banking_base_url() -> String {
