@@ -14,10 +14,10 @@ pub trait MessageHandler: Send + Sync + 'static {
 }
 
 #[derive(Debug, Clone)]
-struct BrokerAdresse {
-    hote: String,
-    port: u16,
-    tls: bool,
+pub(crate) struct BrokerAdresse {
+    pub hote: String,
+    pub port: u16,
+    pub tls: bool,
 }
 
 pub struct AbonneRelay {
@@ -80,7 +80,7 @@ impl AbonneRelay {
     }
 }
 
-fn parser_url(url: &str) -> Result<BrokerAdresse, AbonneError> {
+pub(crate) fn parser_url(url: &str) -> Result<BrokerAdresse, AbonneError> {
     let (schema, reste) = url
         .split_once("://")
         .ok_or_else(|| AbonneError::UrlInvalide(url.to_string()))?;

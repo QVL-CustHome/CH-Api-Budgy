@@ -6,6 +6,7 @@ use crate::domain::ports::ecriture::{
     BalancesWriteRepository, BankTransactionsWriteRepository, ConsentsStatutWriteRepository,
     PlanificationSynchroWriteRepository,
 };
+use crate::domain::ports::evenement_synchro::EventPublisher;
 use crate::domain::ports::lecture::PlanificationSynchroReadRepository;
 use crate::domain::synchro::{
     DependancesSynchro, ParametresSynchro, RapportSynchro, SynchroComptes, SynchroError,
@@ -20,7 +21,7 @@ use std::time::Duration;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
-pub type ServiceSynchroSqlx = SynchroComptes<
+pub type ServiceSynchroSqlx<P> = SynchroComptes<
     SqlxBankAccountsWriteAdapter,
     SqlxBankAccountsWriteAdapter,
     dyn BankDataSource,
@@ -28,14 +29,19 @@ pub type ServiceSynchroSqlx = SynchroComptes<
     SqlxBankTransactionsWriteAdapter,
     SqlxConsentsWriteAdapter,
     HorlogeSysteme,
+    P,
 >;
 
-pub fn construire_service_synchro(
+pub fn construire_service_synchro<P>(
     db: Db,
     crypto: Arc<CryptoService>,
     bank_source: Arc<dyn BankDataSource>,
+    publisher: Arc<P>,
     parametres: ParametresSynchro,
-) -> ServiceSynchroSqlx {
+) -> ServiceSynchroSqlx<P>
+where
+    P: EventPublisher + ?Sized,
+{
     let comptes = SqlxBankAccountsWriteAdapter::new(db.clone(), crypto.clone());
     let soldes = SqlxBalancesWriteAdapter::new(db.clone(), crypto.clone());
     let transactions = SqlxBankTransactionsWriteAdapter::new(db.clone(), crypto.clone());
@@ -49,6 +55,7 @@ pub fn construire_service_synchro(
         transactions,
         consents_statut: consents,
         horloge: HorlogeSysteme,
+        publisher,
     };
 
     SynchroComptes::new(dependances, parametres)
@@ -60,7 +67,7 @@ pub trait CycleSynchro: Send + Sync + 'static {
     ) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send;
 }
 
-impl<R, W, S, B, T, C, H> CycleSynchro for SynchroComptes<R, W, S, B, T, C, H>
+impl<R, W, S, B, T, C, H, P> CycleSynchro for SynchroComptes<R, W, S, B, T, C, H, P>
 where
     R: PlanificationSynchroReadRepository + 'static,
     W: PlanificationSynchroWriteRepository + 'static,
@@ -69,6 +76,7 @@ where
     T: BankTransactionsWriteRepository + 'static,
     C: ConsentsStatutWriteRepository + 'static,
     H: Horloge + 'static,
+    P: EventPublisher + ?Sized + 'static,
 {
     fn executer_cycle(
         &self,

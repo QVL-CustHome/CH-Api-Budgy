@@ -1,9 +1,11 @@
 use ch_api_budgy::config;
-use ch_api_budgy::config::WorkerSynchroSettings;
+use ch_api_budgy::config::{Settings, WorkerSynchroSettings};
 use ch_api_budgy::db;
+use ch_api_budgy::domain::ports::evenement_synchro::{EventPublisher, NoopEventPublisher};
 use ch_api_budgy::domain::synchro::ParametresSynchro;
 use ch_api_budgy::relay::abonne::AbonneRelay;
 use ch_api_budgy::relay::handler::UserDeletedHandler;
+use ch_api_budgy::relay::publisher::PublisherRelay;
 use ch_api_budgy::routes;
 use ch_api_budgy::state::AppState;
 use ch_api_budgy::worker::WorkerSynchroConfig;
@@ -61,7 +63,9 @@ async fn main() {
         }
     };
 
-    let worker_synchro = demarrer_worker_synchro(&settings.config.worker_synchro, &state);
+    let publisher = construire_publisher(&settings);
+    let worker_synchro =
+        demarrer_worker_synchro(&settings.config.worker_synchro, &state, publisher);
 
     let app = routes::router(state);
 
@@ -93,19 +97,42 @@ async fn main() {
     }
 }
 
+fn construire_publisher(settings: &Settings) -> Arc<dyn EventPublisher> {
+    let cle_pem = settings
+        .secrets
+        .relay_jwt_private_key
+        .as_ref()
+        .map(|cle| cle.as_bytes());
+    match PublisherRelay::demarrer(
+        &settings.config.relay,
+        settings.secrets.relay_token.clone(),
+        cle_pem,
+    ) {
+        Ok(Some(publisher)) => publisher,
+        Ok(None) => Arc::new(NoopEventPublisher),
+        Err(e) => {
+            tracing::error!(error = %e, "publisher Relay non démarré, repli sur no-op");
+            Arc::new(NoopEventPublisher)
+        }
+    }
+}
+
 fn demarrer_worker_synchro(
     settings: &WorkerSynchroSettings,
     state: &AppState,
+    publisher: Arc<dyn EventPublisher>,
 ) -> Option<ch_api_budgy::worker::WorkerSynchro> {
     let parametres = ParametresSynchro {
         quota_journalier: settings.quota_journalier,
         intervalle: ChronoDuration::seconds(settings.interval_secondes as i64),
         fenetre_transactions: ChronoDuration::days(settings.fenetre_transactions_jours),
+        ..ParametresSynchro::default()
     };
     let service = construire_service_synchro(
         state.db.clone(),
         state.crypto.clone(),
         state.bank_source.clone(),
+        publisher,
         parametres,
     );
     let config = WorkerSynchroConfig {
