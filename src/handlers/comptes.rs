@@ -2,12 +2,13 @@ use crate::api::error::ApiError;
 use crate::api::extractors::{ApiPath, ApiQuery};
 use crate::api::query::ListQuery;
 use crate::api::response::ListResponse;
-use crate::domain::compte::CompteId;
+use crate::domain::bank_account::BankAccountId;
+use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::lecture::{
-    ComptesReadRepository, ListeComptesQuery, OwnerRef, Tranche,
+    ComptesBancairesReadRepository, Tranche, TransactionsBancairesReadRepository,
 };
 use crate::extract::BudgyUser;
-use crate::handlers::dto::{AccountBalanceDto, AccountDto};
+use crate::handlers::dto::{BankAccountSummaryDto, BankTransactionDto};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -17,36 +18,79 @@ pub async fn list_accounts(
     user: BudgyUser,
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<ListQuery>,
-) -> Result<Json<ListResponse<AccountDto>>, ApiError> {
+) -> Result<Json<ListResponse<BankAccountSummaryDto>>, ApiError> {
     let pagination = query.pagination()?;
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
 
     let resultat = state
-        .comptes
-        .lister(ListeComptesQuery {
-            owner: OwnerRef(user.owner_id().to_string()),
-            tranche: Tranche {
+        .bank_accounts
+        .lister_avec_solde(
+            &proprietaire,
+            Tranche {
                 limit: pagination.limit,
                 offset: pagination.offset,
             },
-        })
+        )
         .await?;
 
-    let data = resultat.elements.into_iter().map(AccountDto::from).collect();
+    let data = resultat
+        .elements
+        .into_iter()
+        .map(BankAccountSummaryDto::from)
+        .collect();
     Ok(Json(ListResponse::new(data, resultat.total)))
 }
 
-pub async fn get_account_balance(
+pub async fn get_account(
     user: BudgyUser,
     State(state): State<AppState>,
     ApiPath(account_id): ApiPath<Uuid>,
-) -> Result<Json<AccountBalanceDto>, ApiError> {
-    let owner = OwnerRef(user.owner_id().to_string());
+) -> Result<Json<BankAccountSummaryDto>, ApiError> {
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
 
     let compte = state
-        .comptes
-        .solde(&owner, &CompteId(account_id))
+        .bank_accounts
+        .fetch_avec_solde(&proprietaire, &BankAccountId(account_id))
         .await?
         .ok_or_else(|| ApiError::not_found("compte introuvable"))?;
 
-    Ok(Json(AccountBalanceDto::from(compte)))
+    Ok(Json(BankAccountSummaryDto::from(compte)))
+}
+
+pub async fn list_account_transactions(
+    user: BudgyUser,
+    State(state): State<AppState>,
+    ApiPath(account_id): ApiPath<Uuid>,
+    ApiQuery(query): ApiQuery<ListQuery>,
+) -> Result<Json<ListResponse<BankTransactionDto>>, ApiError> {
+    let pagination = query.pagination()?;
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
+    let compte = BankAccountId(account_id);
+
+    if !state
+        .bank_accounts
+        .appartient_au_proprietaire(&proprietaire, &compte)
+        .await?
+    {
+        return Err(ApiError::not_found("compte introuvable"));
+    }
+
+    let resultat = state
+        .bank_transactions
+        .lister_par_compte(
+            &proprietaire,
+            &compte,
+            Tranche {
+                limit: pagination.limit,
+                offset: pagination.offset,
+            },
+        )
+        .await?;
+
+    let data = resultat
+        .elements
+        .into_iter()
+        .map(BankTransactionDto::from)
+        .collect();
+    Ok(Json(ListResponse::new(data, resultat.total)))
 }

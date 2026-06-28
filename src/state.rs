@@ -4,9 +4,8 @@ use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::ports::bank_data_source::BankDataSource;
 use crate::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
-use crate::repository::comptes::SqlxComptesRepository;
+use crate::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use crate::repository::consents::SqlxConsentsWriteAdapter;
-use crate::repository::transactions::SqlxTransactionsRepository;
 use crate::services::jwt::JwtService;
 use std::sync::Arc;
 
@@ -15,10 +14,9 @@ pub struct AppState {
     pub db: Db,
     pub crypto: Arc<CryptoService>,
     pub jwt: Arc<JwtService>,
-    pub comptes: Arc<SqlxComptesRepository>,
-    pub transactions: Arc<SqlxTransactionsRepository>,
     pub consents: Arc<SqlxConsentsWriteAdapter>,
     pub bank_accounts: Arc<SqlxBankAccountsWriteAdapter>,
+    pub bank_transactions: Arc<SqlxBankTransactionsWriteAdapter>,
     pub bank_source: Arc<dyn BankDataSource>,
     pub bank_callback_url: String,
 }
@@ -30,10 +28,12 @@ impl AppState {
                 .expect("clé de chiffrement validée à 32 octets au chargement de la config"),
         );
         Self {
-            comptes: Arc::new(SqlxComptesRepository::new(db.clone())),
-            transactions: Arc::new(SqlxTransactionsRepository::new(db.clone())),
             consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
             bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(db.clone(), crypto.clone())),
+            bank_transactions: Arc::new(SqlxBankTransactionsWriteAdapter::new(
+                db.clone(),
+                crypto.clone(),
+            )),
             bank_source: construire_source(
                 settings.config.bank.source,
                 &settings.config.bank.enable_banking,
