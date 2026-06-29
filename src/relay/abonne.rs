@@ -5,8 +5,12 @@ use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AbonneError {
-    #[error("url de broker invalide : {0}")]
-    UrlInvalide(String),
+    #[error("url de broker invalide : schéma de transport absent ou non supporté")]
+    SchemaInvalide,
+    #[error("url de broker invalide : port non numérique")]
+    PortInvalide,
+    #[error("url de broker invalide : hôte absent")]
+    HoteAbsent,
 }
 
 pub trait MessageHandler: Send + Sync + 'static {
@@ -81,29 +85,25 @@ impl AbonneRelay {
 }
 
 pub(crate) fn parser_url(url: &str) -> Result<BrokerAdresse, AbonneError> {
-    let (schema, reste) = url
-        .split_once("://")
-        .ok_or_else(|| AbonneError::UrlInvalide(url.to_string()))?;
+    let (schema, reste) = url.split_once("://").ok_or(AbonneError::SchemaInvalide)?;
 
     let tls = match schema {
         "mqtt" | "tcp" => false,
         "mqtts" | "ssl" | "tls" => true,
-        _ => return Err(AbonneError::UrlInvalide(url.to_string())),
+        _ => return Err(AbonneError::SchemaInvalide),
     };
 
     let autorite = reste.split('/').next().unwrap_or(reste);
     let (hote, port) = match autorite.rsplit_once(':') {
         Some((h, p)) => {
-            let port = p
-                .parse::<u16>()
-                .map_err(|_| AbonneError::UrlInvalide(url.to_string()))?;
+            let port = p.parse::<u16>().map_err(|_| AbonneError::PortInvalide)?;
             (h.to_string(), port)
         }
         None => (autorite.to_string(), if tls { 8883 } else { 1883 }),
     };
 
     if hote.is_empty() {
-        return Err(AbonneError::UrlInvalide(url.to_string()));
+        return Err(AbonneError::HoteAbsent);
     }
 
     Ok(BrokerAdresse { hote, port, tls })

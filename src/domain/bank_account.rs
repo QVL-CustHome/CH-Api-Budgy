@@ -30,10 +30,6 @@ pub struct NouveauBankAccount {
     pub next_sync_at: Option<DateTime<Utc>>,
 }
 
-pub fn dedup_key(consent: &ConsentId, external_account_id: &str) -> String {
-    format!("{}:{external_account_id}", consent.0)
-}
-
 #[derive(Debug, Clone)]
 pub struct CompteASynchroniser {
     pub id: BankAccountId,
