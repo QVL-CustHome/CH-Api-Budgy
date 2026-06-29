@@ -1,19 +1,10 @@
-use async_trait::async_trait;
-use ch_api_budgy::domain::balance::{Balance, BalanceId, BalanceType, NouvelleBalance};
-use ch_api_budgy::domain::bank_account::{
-    BankAccount, BankAccountId, CompteASynchroniser, PlanificationSynchro,
-};
+mod support;
+
+use ch_api_budgy::domain::bank_account::{BankAccountId, CompteASynchroniser, PlanificationSynchro};
 use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::consent::{Consent, ConsentId, ConsentStatus};
 use ch_api_budgy::domain::horloge::Horloge;
-use ch_api_budgy::domain::ports::bank_data_source::{
-    BankDataSource, BankDataSourceError, ConsentementInitie, DemandeConsentement, Etablissement,
-    ReponseAutorisation,
-};
-use ch_api_budgy::domain::ports::ecriture::{
-    BalancesWriteRepository, BankTransactionsWriteRepository, ConsentsStatutWriteRepository,
-    EcritureError, PlanificationSynchroWriteRepository, ResultatInsertion,
-};
+use ch_api_budgy::domain::ports::ecriture::{EcritureError, PlanificationSynchroWriteRepository};
 use ch_api_budgy::domain::ports::evenement_synchro::{
     EvenementSynchro, EventPublisher, NoopEventPublisher, TypeEvenementSynchro,
 };
@@ -21,13 +12,13 @@ use ch_api_budgy::domain::ports::lecture::{
     CompteEcheant, LectureError, PlanificationSynchroReadRepository,
 };
 use ch_api_budgy::domain::synchro::{DependancesSynchro, ParametresSynchro, SynchroComptes};
-use ch_api_budgy::domain::transaction_bancaire::{
-    NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
-};
-use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use support::{
+    BalancesMemoireStub, ConsentsStatutStub, SourceBancaireFake, TransactionsMemoireStub,
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -66,121 +57,6 @@ impl PlanificationSynchroWriteRepository for CompteUnique {
         _quota: i32,
     ) -> Result<bool, EcritureError> {
         Ok(true)
-    }
-}
-
-#[derive(Clone, Default)]
-struct ConsentsMemoire;
-
-impl ConsentsStatutWriteRepository for ConsentsMemoire {
-    async fn marquer_statut(
-        &self,
-        _consent: &ConsentId,
-        _statut: ConsentStatus,
-    ) -> Result<(), EcritureError> {
-        Ok(())
-    }
-}
-
-#[derive(Clone, Default)]
-struct BalancesMemoire;
-
-impl BalancesWriteRepository for BalancesMemoire {
-    async fn enregistrer(&self, _nouvelle: NouvelleBalance) -> Result<BalanceId, EcritureError> {
-        Ok(BalanceId(Uuid::new_v4()))
-    }
-}
-
-#[derive(Clone, Default)]
-struct TransactionsMemoire;
-
-impl BankTransactionsWriteRepository for TransactionsMemoire {
-    async fn enregistrer(
-        &self,
-        _nouvelle: NouvelleTransactionBancaire,
-    ) -> Result<ResultatInsertion<TransactionBancaireId>, EcritureError> {
-        Ok(ResultatInsertion::Inseree(TransactionBancaireId(
-            Uuid::new_v4(),
-        )))
-    }
-}
-
-struct SourceSimple {
-    en_echec: bool,
-}
-
-#[async_trait]
-impl BankDataSource for SourceSimple {
-    async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError> {
-        Ok(Vec::new())
-    }
-
-    async fn initier_consentement(
-        &self,
-        _demande: DemandeConsentement,
-    ) -> Result<ConsentementInitie, BankDataSourceError> {
-        Err(BankDataSourceError::SourceNonConfiguree)
-    }
-
-    async fn completer_consentement(
-        &self,
-        _proprietaire: &ProprietaireId,
-        _reponse: ReponseAutorisation,
-    ) -> Result<Consent, BankDataSourceError> {
-        Err(BankDataSourceError::SourceNonConfiguree)
-    }
-
-    async fn lister_comptes(
-        &self,
-        _consent: &Consent,
-    ) -> Result<Vec<BankAccount>, BankDataSourceError> {
-        Ok(Vec::new())
-    }
-
-    async fn solde(
-        &self,
-        _consent: &Consent,
-        compte: &BankAccount,
-    ) -> Result<Vec<Balance>, BankDataSourceError> {
-        if self.en_echec {
-            return Err(BankDataSourceError::ConsentementInvalide);
-        }
-        Ok(vec![Balance {
-            id: BalanceId(Uuid::new_v4()),
-            bank_account: compte.id.clone(),
-            balance_type: BalanceType::Available,
-            amount_cents: 100_000,
-            currency: compte.currency.clone(),
-            reference_date: Utc.with_ymd_and_hms(2026, 6, 27, 0, 0, 0).unwrap(),
-            created_at: Utc.with_ymd_and_hms(2026, 6, 27, 0, 0, 0).unwrap(),
-        }])
-    }
-
-    async fn lister_transactions(
-        &self,
-        _consent: &Consent,
-        compte: &BankAccount,
-        _depuis: NaiveDate,
-    ) -> Result<Vec<TransactionBancaire>, BankDataSourceError> {
-        Ok(vec![TransactionBancaire {
-            id: TransactionBancaireId(Uuid::new_v4()),
-            bank_account: compte.id.clone(),
-            external_transaction_id: "tx-1".to_string(),
-            status: TransactionStatus::Booked,
-            label: "ACHAT".to_string(),
-            amount_cents: -1_299,
-            currency: "EUR".to_string(),
-            booking_date: None,
-            value_date: None,
-            created_at: Utc.with_ymd_and_hms(2026, 6, 27, 0, 0, 0).unwrap(),
-        }])
-    }
-
-    async fn revoquer_consentement(
-        &self,
-        consent: &Consent,
-    ) -> Result<Consent, BankDataSourceError> {
-        Ok(consent.clone())
     }
 }
 
@@ -257,15 +133,15 @@ fn compte(consent: &Consent) -> CompteASynchroniser {
 
 fn service<P>(
     consent: Consent,
-    source: Arc<SourceSimple>,
+    source: Arc<SourceBancaireFake>,
     publisher: Arc<P>,
 ) -> SynchroComptes<
     CompteUnique,
     CompteUnique,
-    SourceSimple,
-    BalancesMemoire,
-    TransactionsMemoire,
-    ConsentsMemoire,
+    SourceBancaireFake,
+    BalancesMemoireStub,
+    TransactionsMemoireStub,
+    ConsentsStatutStub,
     HorlogeFixe,
     P,
 >
@@ -280,9 +156,9 @@ where
         planification_lecture: etat.clone(),
         planification_ecriture: etat,
         source_bancaire: source,
-        soldes: BalancesMemoire,
-        transactions: TransactionsMemoire,
-        consents_statut: ConsentsMemoire,
+        soldes: BalancesMemoireStub,
+        transactions: TransactionsMemoireStub,
+        consents_statut: ConsentsStatutStub,
         horloge: HorlogeFixe(maintenant()),
         publisher,
     };
@@ -292,7 +168,7 @@ where
 #[tokio::test]
 async fn la_synchro_aboutit_meme_avec_un_publisher_dormant() {
     let consent = consent_actif(Duration::days(30));
-    let source = Arc::new(SourceSimple { en_echec: false });
+    let source = Arc::new(SourceBancaireFake::operationnelle());
     let publisher = Arc::new(NoopEventPublisher);
     let synchro = service(consent, source, publisher);
 
@@ -306,7 +182,7 @@ async fn la_synchro_aboutit_meme_avec_un_publisher_dormant() {
 #[tokio::test]
 async fn la_synchro_aboutit_meme_si_le_publisher_est_sollicite() {
     let consent = consent_actif(Duration::days(30));
-    let source = Arc::new(SourceSimple { en_echec: false });
+    let source = Arc::new(SourceBancaireFake::operationnelle());
     let publisher = Arc::new(PublisherDefaillant {
         appele: AtomicBool::new(false),
     });
@@ -321,7 +197,7 @@ async fn la_synchro_aboutit_meme_si_le_publisher_est_sollicite() {
 #[tokio::test]
 async fn le_cycle_nominal_emet_les_events_attendus() {
     let consent = consent_actif(Duration::days(30));
-    let source = Arc::new(SourceSimple { en_echec: false });
+    let source = Arc::new(SourceBancaireFake::operationnelle());
     let espion = Arc::new(PublisherEspion::default());
     let synchro = service(consent, source, espion.clone());
 
@@ -338,7 +214,7 @@ async fn le_cycle_nominal_emet_les_events_attendus() {
 #[tokio::test]
 async fn l_echec_source_emet_sync_failed_et_consent_expired() {
     let consent = consent_actif(Duration::days(30));
-    let source = Arc::new(SourceSimple { en_echec: true });
+    let source = Arc::new(SourceBancaireFake::en_echec());
     let espion = Arc::new(PublisherEspion::default());
     let synchro = service(consent, source, espion.clone());
 
@@ -354,7 +230,7 @@ async fn l_echec_source_emet_sync_failed_et_consent_expired() {
 #[tokio::test]
 async fn le_consentement_proche_de_l_expiration_emet_renewal_required() {
     let consent = consent_actif(Duration::days(3));
-    let source = Arc::new(SourceSimple { en_echec: false });
+    let source = Arc::new(SourceBancaireFake::operationnelle());
     let espion = Arc::new(PublisherEspion::default());
     let synchro = service(consent, source, espion.clone());
 

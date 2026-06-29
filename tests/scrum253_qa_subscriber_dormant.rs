@@ -72,5 +72,5 @@ async fn relay_actif_avec_url_invalide_echoue_proprement_sans_panique() {
 
     let resultat = AbonneRelay::demarrer(&config, None, handler);
 
-    assert!(matches!(resultat, Err(AbonneError::UrlInvalide(_))));
+    assert!(matches!(resultat, Err(AbonneError::SchemaInvalide)));
 }

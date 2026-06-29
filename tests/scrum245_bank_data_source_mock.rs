@@ -5,13 +5,18 @@ use ch_api_budgy::domain::horloge::Horloge;
 use ch_api_budgy::domain::ports::bank_data_source::{
     BankDataSource, DemandeConsentement, ReponseAutorisation,
 };
-use ch_api_budgy::domain::transaction_bancaire::{TransactionStatus, dedup_key};
+use ch_api_budgy::domain::bank_account::BankAccountId;
+use ch_api_budgy::domain::transaction_bancaire::TransactionStatus;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 const OWNER: &str = "owner-scrum-245";
 const ETABLISSEMENT: &str = "banque-demo";
+
+fn cle_transaction(bank_account: &BankAccountId, external_transaction_id: &str) -> String {
+    format!("{}:{external_transaction_id}", bank_account.0)
+}
 
 struct HorlogeFixe(DateTime<Utc>);
 
@@ -121,11 +126,11 @@ async fn les_transactions_du_mock_se_dedupliquent_par_cle() {
 
     let cles_premier: HashSet<String> = premier_lot
         .iter()
-        .map(|t| dedup_key(&t.bank_account, &t.external_transaction_id))
+        .map(|t| cle_transaction(&t.bank_account, &t.external_transaction_id))
         .collect();
     let cles_rejeu: HashSet<String> = rejeu
         .iter()
-        .map(|t| dedup_key(&t.bank_account, &t.external_transaction_id))
+        .map(|t| cle_transaction(&t.bank_account, &t.external_transaction_id))
         .collect();
 
     assert_eq!(cles_premier, cles_rejeu);

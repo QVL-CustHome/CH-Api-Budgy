@@ -10,7 +10,8 @@ use ch_api_budgy::domain::consent::{Consent, ConsentId, ConsentStatus};
 use ch_api_budgy::domain::ports::bank_data_source::{
     BankDataSource, DemandeConsentement, ReponseAutorisation,
 };
-use ch_api_budgy::domain::transaction_bancaire::{TransactionStatus, dedup_key};
+use ch_api_budgy::domain::bank_account::BankAccountId;
+use ch_api_budgy::domain::transaction_bancaire::TransactionStatus;
 use chrono::{NaiveDate, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -18,6 +19,10 @@ use support::{EchangeSimule, TransportSimule, paire_rsa_test};
 
 const APP_ID: &str = "app-test-246";
 const OWNER: &str = "owner-246";
+
+fn cle_transaction(bank_account: &BankAccountId, external_transaction_id: &str) -> String {
+    format!("{}:{external_transaction_id}", bank_account.0)
+}
 
 fn signataire() -> SignataireJwt {
     let paire = paire_rsa_test();
@@ -209,7 +214,7 @@ async fn lister_transactions_mappe_pending_booked_signe_et_dedup_key() {
 
     let cles: HashSet<String> = transactions
         .iter()
-        .map(|t| dedup_key(&t.bank_account, &t.external_transaction_id))
+        .map(|t| cle_transaction(&t.bank_account, &t.external_transaction_id))
         .collect();
     assert_eq!(cles.len(), transactions.len());
 
