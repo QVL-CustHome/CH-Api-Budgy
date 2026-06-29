@@ -3,7 +3,7 @@ use crate::db::Db;
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::{
     BankAccount, BankAccountId, CompteASynchroniser, NouveauBankAccount, PlanificationSynchro,
-    dedup_key, masquer_iban,
+    masquer_iban,
 };
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId, ConsentStatus};
@@ -27,6 +27,14 @@ const FIELD_CONSENT_EXTERNAL_REF: &str = "external_ref";
 const TABLE: &str = "bank_account";
 const FIELD_EXTERNAL_ACCOUNT_ID: &str = "external_account_id";
 const FIELD_IBAN: &str = "iban";
+
+fn dedup_key_compte(
+    crypto: &CryptoService,
+    consent: &ConsentId,
+    external_account_id: &str,
+) -> String {
+    crypto.dedup_key(consent.0.as_bytes(), external_account_id)
+}
 
 #[derive(Clone)]
 pub struct SqlxBankAccountsRepository {
@@ -53,7 +61,7 @@ impl SqlxBankAccountsRepository {
         )?;
         let iban_encrypted = chiffrer_texte(crypto, owner, TABLE, FIELD_IBAN, &nouveau.iban)?;
         let iban_masked = masquer_iban(&nouveau.iban);
-        let dedup = dedup_key(&nouveau.consent, &nouveau.external_account_id);
+        let dedup = dedup_key_compte(crypto, &nouveau.consent, &nouveau.external_account_id);
 
         let id: Option<Uuid> = sqlx::query_scalar(
             "INSERT INTO budgy.bank_account \

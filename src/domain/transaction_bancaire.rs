@@ -53,7 +53,3 @@ pub struct NouvelleTransactionBancaire {
     pub booking_date: Option<NaiveDate>,
     pub value_date: Option<NaiveDate>,
 }
-
-pub fn dedup_key(bank_account: &BankAccountId, external_transaction_id: &str) -> String {
-    format!("{}:{external_transaction_id}", bank_account.0)
-}
