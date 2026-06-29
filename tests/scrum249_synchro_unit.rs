@@ -1,5 +1,7 @@
+mod support;
+
 use async_trait::async_trait;
-use ch_api_budgy::domain::balance::{Balance, BalanceId, BalanceType, NouvelleBalance};
+use ch_api_budgy::domain::balance::{Balance, BalanceId, BalanceType};
 use ch_api_budgy::domain::bank_account::{
     BankAccount, BankAccountId, CompteASynchroniser, PlanificationSynchro,
 };
@@ -11,8 +13,8 @@ use ch_api_budgy::domain::ports::bank_data_source::{
     ReponseAutorisation,
 };
 use ch_api_budgy::domain::ports::ecriture::{
-    BalancesWriteRepository, BankTransactionsWriteRepository, ConsentsStatutWriteRepository,
-    EcritureError, PlanificationSynchroWriteRepository, ResultatInsertion,
+    BankTransactionsWriteRepository, ConsentsStatutWriteRepository, EcritureError,
+    PlanificationSynchroWriteRepository, ResultatInsertion,
 };
 use ch_api_budgy::domain::ports::evenement_synchro::NoopEventPublisher;
 use ch_api_budgy::domain::ports::lecture::{
@@ -25,6 +27,7 @@ use ch_api_budgy::domain::transaction_bancaire::{
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use support::BalancesMemoireStub;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -172,18 +175,6 @@ impl ConsentsStatutWriteRepository for ConsentsStatutMemoire {
             .expect("statuts")
             .insert(consent.0, statut);
         Ok(())
-    }
-}
-
-#[derive(Clone, Default)]
-struct BalancesMemoire {
-    enregistrees: Arc<Mutex<Vec<NouvelleBalance>>>,
-}
-
-impl BalancesWriteRepository for BalancesMemoire {
-    async fn enregistrer(&self, nouvelle: NouvelleBalance) -> Result<BalanceId, EcritureError> {
-        self.enregistrees.lock().expect("balances").push(nouvelle);
-        Ok(BalanceId(Uuid::new_v4()))
     }
 }
 
@@ -372,7 +363,7 @@ type Service = SynchroComptes<
     EtatComptes,
     EtatComptes,
     SourceProgrammable,
-    BalancesMemoire,
+    BalancesMemoireStub,
     TransactionsMemoire,
     ConsentsStatutMemoire,
     HorlogeFixe,
@@ -414,7 +405,7 @@ fn monter_avec_source(
         planification_lecture: etat.clone(),
         planification_ecriture: etat.clone(),
         source_bancaire: source.clone(),
-        soldes: BalancesMemoire::default(),
+        soldes: BalancesMemoireStub,
         transactions: transactions.clone(),
         consents_statut: consents.clone(),
         horloge: horloge.clone(),

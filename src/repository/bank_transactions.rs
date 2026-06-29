@@ -10,7 +10,6 @@ use crate::domain::ports::lecture::{
 };
 use crate::domain::transaction_bancaire::{
     NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
-    dedup_key,
 };
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
@@ -24,6 +23,14 @@ const TABLE: &str = "bank_transaction";
 const FIELD_EXTERNAL_TRANSACTION_ID: &str = "external_transaction_id";
 const FIELD_LABEL: &str = "label";
 const FIELD_AMOUNT: &str = "amount_cents";
+
+fn dedup_key_transaction(
+    crypto: &CryptoService,
+    bank_account: &BankAccountId,
+    external_transaction_id: &str,
+) -> String {
+    crypto.dedup_key(bank_account.0.as_bytes(), external_transaction_id)
+}
 
 #[derive(Clone)]
 pub struct SqlxBankTransactionsRepository {
@@ -50,7 +57,11 @@ impl SqlxBankTransactionsRepository {
         )?;
         let label = chiffrer_texte(crypto, &owner, TABLE, FIELD_LABEL, &nouvelle.label)?;
         let amount = chiffrer_montant(crypto, &owner, TABLE, FIELD_AMOUNT, nouvelle.amount_cents)?;
-        let dedup = dedup_key(&nouvelle.bank_account, &nouvelle.external_transaction_id);
+        let dedup = dedup_key_transaction(
+            crypto,
+            &nouvelle.bank_account,
+            &nouvelle.external_transaction_id,
+        );
 
         let resultat: Option<(Uuid, bool)> = sqlx::query_as(
             "INSERT INTO budgy.bank_transaction \
