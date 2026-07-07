@@ -186,7 +186,11 @@ struct TransactionsMemoire {
 
 impl TransactionsMemoire {
     fn statut(&self, cle: &str) -> Option<TransactionStatus> {
-        self.par_dedup.lock().expect("transactions").get(cle).copied()
+        self.par_dedup
+            .lock()
+            .expect("transactions")
+            .get(cle)
+            .copied()
     }
 
     fn appels(&self) -> u32 {
@@ -344,7 +348,11 @@ fn compte_fixture(consent: Consent, echu_a: Option<DateTime<Utc>>) -> CompteFixt
     }
 }
 
-fn transaction(compte: &BankAccountId, suffixe: &str, status: TransactionStatus) -> TransactionBancaire {
+fn transaction(
+    compte: &BankAccountId,
+    suffixe: &str,
+    status: TransactionStatus,
+) -> TransactionBancaire {
     TransactionBancaire {
         id: TransactionBancaireId(Uuid::new_v4()),
         bank_account: compte.clone(),
@@ -425,7 +433,10 @@ fn monter_avec_source(
 async fn seuls_les_comptes_echeants_sont_synchronises() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let echu = compte_fixture(consent_actif(maintenant), Some(maintenant - Duration::hours(1)));
+    let echu = compte_fixture(
+        consent_actif(maintenant),
+        Some(maintenant - Duration::hours(1)),
+    );
     let non_echu = compte_fixture(
         consent_actif(maintenant),
         Some(maintenant + Duration::hours(2)),
@@ -448,7 +459,10 @@ async fn seuls_les_comptes_echeants_sont_synchronises() {
 async fn le_quota_journalier_est_un_invariant() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let compte = compte_fixture(consent_actif(maintenant), Some(maintenant - Duration::hours(1)));
+    let compte = compte_fixture(
+        consent_actif(maintenant),
+        Some(maintenant - Duration::hours(1)),
+    );
     let parametres = ParametresSynchro {
         intervalle: Duration::seconds(0),
         ..ParametresSynchro::default()
@@ -472,7 +486,10 @@ async fn le_quota_journalier_est_un_invariant() {
 async fn le_rejeu_respecte_next_sync_at() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let compte = compte_fixture(consent_actif(maintenant), Some(maintenant - Duration::hours(1)));
+    let compte = compte_fixture(
+        consent_actif(maintenant),
+        Some(maintenant - Duration::hours(1)),
+    );
     let banc = monter(
         vec![compte.clone()],
         vec![
@@ -486,7 +503,10 @@ async fn le_rejeu_respecte_next_sync_at() {
     banc.service.executer().await.expect("premier cycle");
     let rapport = banc.service.executer().await.expect("rejeu cycle");
 
-    assert_eq!(rapport.comptes_evalues, 0, "compte non échu au rejeu immédiat");
+    assert_eq!(
+        rapport.comptes_evalues, 0,
+        "compte non échu au rejeu immédiat"
+    );
     assert_eq!(*banc.source.appels_transactions.lock().unwrap(), 1);
     assert_eq!(banc.comptes.compte(&compte.id).sync_count_today, 1);
 }
@@ -495,7 +515,10 @@ async fn le_rejeu_respecte_next_sync_at() {
 async fn la_transition_pending_vers_booked_est_appliquee_au_prochain_creneau() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let compte = compte_fixture(consent_actif(maintenant), Some(maintenant - Duration::hours(1)));
+    let compte = compte_fixture(
+        consent_actif(maintenant),
+        Some(maintenant - Duration::hours(1)),
+    );
     let banc = monter(
         vec![compte.clone()],
         vec![
@@ -508,7 +531,8 @@ async fn la_transition_pending_vers_booked_est_appliquee_au_prochain_creneau() {
 
     banc.service.executer().await.expect("premier cycle");
     assert_eq!(
-        banc.transactions.statut(&format!("{}:tx-achat", compte.id.0)),
+        banc.transactions
+            .statut(&format!("{}:tx-achat", compte.id.0)),
         Some(TransactionStatus::Pending)
     );
 
@@ -518,7 +542,8 @@ async fn la_transition_pending_vers_booked_est_appliquee_au_prochain_creneau() {
     assert_eq!(rapport.comptes_synchronises, 1);
     assert_eq!(rapport.transactions_doublons, 1);
     assert_eq!(
-        banc.transactions.statut(&format!("{}:tx-achat", compte.id.0)),
+        banc.transactions
+            .statut(&format!("{}:tx-achat", compte.id.0)),
         Some(TransactionStatus::Booked)
     );
     assert_eq!(banc.transactions.appels(), 2);
@@ -533,7 +558,11 @@ async fn le_consentement_expire_est_exclu_de_la_selection() {
     let compte = compte_fixture(consent, Some(maintenant - Duration::hours(1)));
     let banc = monter(
         vec![compte.clone()],
-        vec![vec![transaction(&compte.id, "a", TransactionStatus::Booked)]],
+        vec![vec![transaction(
+            &compte.id,
+            "a",
+            TransactionStatus::Booked,
+        )]],
         horloge,
         ParametresSynchro::default(),
     );
@@ -549,7 +578,10 @@ async fn le_consentement_expire_est_exclu_de_la_selection() {
 async fn le_consentement_invalide_cote_fournisseur_est_marque_expire() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let compte = compte_fixture(consent_actif(maintenant), Some(maintenant - Duration::hours(1)));
+    let compte = compte_fixture(
+        consent_actif(maintenant),
+        Some(maintenant - Duration::hours(1)),
+    );
     let consent_id = compte.consent.id.clone();
     let banc = monter_avec_source(
         vec![compte.clone()],
@@ -572,7 +604,10 @@ async fn le_consentement_invalide_cote_fournisseur_est_marque_expire() {
 async fn le_compteur_est_reinitialise_au_changement_de_jour() {
     let maintenant = base();
     let horloge = HorlogeFixe::new(maintenant);
-    let mut compte = compte_fixture(consent_actif(maintenant + Duration::days(2)), Some(maintenant - Duration::hours(1)));
+    let mut compte = compte_fixture(
+        consent_actif(maintenant + Duration::days(2)),
+        Some(maintenant - Duration::hours(1)),
+    );
     compte.sync_count_today = 4;
     compte.last_sync_day = Some(maintenant.date_naive());
     let banc = monter(
@@ -588,7 +623,10 @@ async fn le_compteur_est_reinitialise_au_changement_de_jour() {
     horloge.avancer(Duration::days(1));
     let rapport_jour2 = banc.service.executer().await.expect("cycle jour 2");
 
-    assert_eq!(rapport_jour2.comptes_synchronises, 1, "reset au changement de jour");
+    assert_eq!(
+        rapport_jour2.comptes_synchronises, 1,
+        "reset au changement de jour"
+    );
     assert_eq!(banc.comptes.compte(&compte.id).sync_count_today, 1);
     assert_eq!(
         banc.comptes.compte(&compte.id).last_sync_day,

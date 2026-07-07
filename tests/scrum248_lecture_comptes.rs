@@ -67,7 +67,10 @@ fn bearer(owner: &str) -> String {
 
 fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),
@@ -84,7 +87,12 @@ fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
     }
 }
 
-async fn get(db: &DisposableDb, crypto: &Arc<CryptoService>, owner: &str, uri: &str) -> (StatusCode, String) {
+async fn get(
+    db: &DisposableDb,
+    crypto: &Arc<CryptoService>,
+    owner: &str,
+    uri: &str,
+) -> (StatusCode, String) {
     let request = Request::builder()
         .method("GET")
         .uri(uri)
@@ -259,9 +267,23 @@ async fn liste_comptes_ne_renvoie_que_ceux_du_sub() {
     let db = db_or_skip!();
     let crypto = crypto();
     let consent_owner = consent(&db, &crypto, OWNER).await;
-    compte(&db, &crypto, OWNER, consent_owner, "FR7630006000011234567890189").await;
+    compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent_owner,
+        "FR7630006000011234567890189",
+    )
+    .await;
     let consent_intrus = consent(&db, &crypto, AUTRE_OWNER).await;
-    compte(&db, &crypto, AUTRE_OWNER, consent_intrus, "FR7610107001011234567890129").await;
+    compte(
+        &db,
+        &crypto,
+        AUTRE_OWNER,
+        consent_intrus,
+        "FR7610107001011234567890129",
+    )
+    .await;
 
     let (status, corps) = get(&db, &crypto, OWNER, "/v1/accounts").await;
     let body = body_json(&corps);

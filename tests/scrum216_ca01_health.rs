@@ -33,7 +33,10 @@ fn test_jwt() -> Arc<JwtService> {
 fn test_state(db: &DisposableDb) -> AppState {
     let crypto = test_crypto();
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),

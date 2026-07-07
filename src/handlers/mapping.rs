@@ -15,9 +15,7 @@ impl From<EcritureError> for ApiError {
     fn from(error: EcritureError) -> Self {
         match error {
             EcritureError::Acces(_) => ApiError::internal("erreur d'écriture des données"),
-            EcritureError::Protection(_) => {
-                ApiError::internal("protection des données impossible")
-            }
+            EcritureError::Protection(_) => ApiError::internal("protection des données impossible"),
         }
     }
 }

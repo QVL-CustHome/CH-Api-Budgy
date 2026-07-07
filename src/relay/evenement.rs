@@ -20,8 +20,8 @@ struct UserDeletedPayload {
 }
 
 pub fn parser_user_deleted(payload: &[u8]) -> Result<ProprietaireId, EvenementError> {
-    let brut: UserDeletedPayload =
-        serde_json::from_slice(payload).map_err(|e| EvenementError::PayloadInvalide(e.to_string()))?;
+    let brut: UserDeletedPayload = serde_json::from_slice(payload)
+        .map_err(|e| EvenementError::PayloadInvalide(e.to_string()))?;
 
     if brut.event_type != TYPE_USER_DELETED {
         return Err(EvenementError::TypeInattendu(brut.event_type));

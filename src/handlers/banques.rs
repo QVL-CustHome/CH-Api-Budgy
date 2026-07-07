@@ -196,7 +196,10 @@ pub async fn list_consents(
     State(state): State<AppState>,
 ) -> Result<Json<ListResponse<ConsentDto>>, ApiError> {
     let proprietaire = ProprietaireId(user.owner_id().to_string());
-    let consents = state.consents.lister_par_proprietaire(&proprietaire).await?;
+    let consents = state
+        .consents
+        .lister_par_proprietaire(&proprietaire)
+        .await?;
     let total = consents.len() as u64;
     let maintenant = Utc::now();
     let data = consents

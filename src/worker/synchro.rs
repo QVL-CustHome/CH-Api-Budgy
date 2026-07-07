@@ -62,9 +62,7 @@ where
 }
 
 pub trait CycleSynchro: Send + Sync + 'static {
-    fn executer_cycle(
-        &self,
-    ) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send;
+    fn executer_cycle(&self) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send;
 }
 
 impl<R, W, S, B, T, C, H, P> CycleSynchro for SynchroComptes<R, W, S, B, T, C, H, P>
@@ -78,9 +76,7 @@ where
     H: Horloge + 'static,
     P: EventPublisher + ?Sized + 'static,
 {
-    fn executer_cycle(
-        &self,
-    ) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send {
+    fn executer_cycle(&self) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send {
         self.executer()
     }
 }

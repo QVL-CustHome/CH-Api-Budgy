@@ -138,7 +138,10 @@ fn state(db: &DisposableDb) -> AppState {
 fn state_avec_source(db: &DisposableDb, bank_source: Arc<dyn BankDataSource>) -> AppState {
     let crypto = Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap());
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),

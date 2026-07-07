@@ -13,7 +13,7 @@ use crate::adapters::bank::enable_banking::mapping::{
     vers_transaction,
 };
 use crate::adapters::bank::enable_banking::transport::{
-    MethodeHttp, RequeteHttp, ReponseHttp, TransportError, TransportHttp,
+    MethodeHttp, ReponseHttp, RequeteHttp, TransportError, TransportHttp,
 };
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::BankAccount;
@@ -71,8 +71,7 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
     }
 
     fn deserialiser<R: DeserializeOwned>(corps: &str) -> Result<R, BankDataSourceError> {
-        serde_json::from_str(corps)
-            .map_err(|e| BankDataSourceError::ReponseInvalide(e.to_string()))
+        serde_json::from_str(corps).map_err(|e| BankDataSourceError::ReponseInvalide(e.to_string()))
     }
 
     fn url_retour(&self, demande: &DemandeConsentement) -> String {
@@ -84,9 +83,7 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
         }
     }
 
-    pub async fn lister_etablissements(
-        &self,
-    ) -> Result<Vec<Etablissement>, BankDataSourceError> {
+    pub async fn lister_etablissements(&self) -> Result<Vec<Etablissement>, BankDataSourceError> {
         let reponse = self
             .appeler(MethodeHttp::Get, "/aspsps".to_string(), None)
             .await?;

@@ -13,9 +13,9 @@ pub struct DateRangeFilter {
 impl DateRangeFilter {
     pub fn validate(self) -> Result<Self, ApiError> {
         match (self.from, self.to) {
-            (Some(from), Some(to)) if from > to => {
-                Err(ApiError::validation("from doit être antérieur ou égal à to"))
-            }
+            (Some(from), Some(to)) if from > to => Err(ApiError::validation(
+                "from doit être antérieur ou égal à to",
+            )),
             _ => Ok(self),
         }
     }

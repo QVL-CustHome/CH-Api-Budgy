@@ -29,7 +29,10 @@ impl AppState {
         );
         Self {
             consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
-            bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(db.clone(), crypto.clone())),
+            bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
+                db.clone(),
+                crypto.clone(),
+            )),
             bank_transactions: Arc::new(SqlxBankTransactionsWriteAdapter::new(
                 db.clone(),
                 crypto.clone(),

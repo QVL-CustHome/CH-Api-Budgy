@@ -1,6 +1,8 @@
 mod support;
 
-use ch_api_budgy::domain::bank_account::{BankAccountId, CompteASynchroniser, PlanificationSynchro};
+use ch_api_budgy::domain::bank_account::{
+    BankAccountId, CompteASynchroniser, PlanificationSynchro,
+};
 use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::consent::{Consent, ConsentId, ConsentStatus};
 use ch_api_budgy::domain::horloge::Horloge;

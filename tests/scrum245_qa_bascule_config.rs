@@ -1,6 +1,6 @@
 use ch_api_budgy::adapters::bank::selection::{SourceBancaire, construire_source};
-use ch_api_budgy::config::EnableBankingConfig;
 use ch_api_budgy::config;
+use ch_api_budgy::config::EnableBankingConfig;
 use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::consent::ConsentId;
 use ch_api_budgy::domain::ports::bank_data_source::{BankDataSourceError, DemandeConsentement};
@@ -18,7 +18,8 @@ struct ScenarioConfig {
 
 impl ScenarioConfig {
     fn nouveau(section_bank: &str, bank_source_env: Option<&str>) -> Self {
-        let dir = std::env::temp_dir().join(format!("budgy_qa_245_{}", uuid::Uuid::new_v4().simple()));
+        let dir =
+            std::env::temp_dir().join(format!("budgy_qa_245_{}", uuid::Uuid::new_v4().simple()));
         std::fs::create_dir_all(&dir).expect("création du dossier de config jetable");
         let cfg_path = dir.join("config.toml");
         let contenu = format!("[server]\nport = 8183\nlog_level = \"INFO\"\n{section_bank}");
@@ -38,7 +39,10 @@ impl ScenarioConfig {
         unsafe {
             std::env::set_var("DATABASE_URL", "postgres://u:p@localhost/db");
             std::env::set_var("BUDGY_ENCRYPTION_KEY", TEST_KEY_B64);
-            std::env::set_var("JWT_SECRET", "this_is_a_test_jwt_secret_at_least_32_bytes_long");
+            std::env::set_var(
+                "JWT_SECRET",
+                "this_is_a_test_jwt_secret_at_least_32_bytes_long",
+            );
             match bank_source_env {
                 Some(valeur) => std::env::set_var("BANK_SOURCE", valeur),
                 None => std::env::remove_var("BANK_SOURCE"),
@@ -125,7 +129,10 @@ fn une_valeur_bank_source_invalide_est_ignoree_et_conserve_la_config() {
 
 #[tokio::test]
 async fn la_source_reelle_sans_credentials_refuse_proprement() {
-    let source = construire_source(SourceBancaire::EnableBanking, &EnableBankingConfig::default());
+    let source = construire_source(
+        SourceBancaire::EnableBanking,
+        &EnableBankingConfig::default(),
+    );
     let demande = DemandeConsentement {
         consent_id: ConsentId(uuid::Uuid::new_v4()),
         proprietaire: ProprietaireId("owner-qa-245".to_string()),
