@@ -39,10 +39,7 @@ impl ScenarioConfig {
         unsafe {
             std::env::set_var("DATABASE_URL", "postgres://u:p@localhost/db");
             std::env::set_var("BUDGY_ENCRYPTION_KEY", TEST_KEY_B64);
-            std::env::set_var(
-                "JWT_SECRET",
-                "this_is_a_test_jwt_secret_at_least_32_bytes_long",
-            );
+            std::env::set_var("JWT_SECRET", "example-jwt-secret-not-a-real-one-min-32b");
             match bank_source_env {
                 Some(valeur) => std::env::set_var("BANK_SOURCE", valeur),
                 None => std::env::remove_var("BANK_SOURCE"),
