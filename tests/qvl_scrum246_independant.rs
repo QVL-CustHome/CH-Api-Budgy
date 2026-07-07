@@ -114,7 +114,10 @@ async fn ac3_adapter_sans_credentials_refuse_proprement_sur_toutes_les_operation
     let adapter = EnableBankingBankDataSource::depuis_config(&config);
 
     let initie = adapter.initier_consentement(demande()).await;
-    assert!(matches!(initie, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        initie,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 
     let complete = adapter
         .completer_consentement(
@@ -125,13 +128,22 @@ async fn ac3_adapter_sans_credentials_refuse_proprement_sur_toutes_les_operation
             },
         )
         .await;
-    assert!(matches!(complete, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        complete,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 
     let comptes = adapter.lister_comptes(&consent_actif("s")).await;
-    assert!(matches!(comptes, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        comptes,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 
     let solde = adapter.solde(&consent_actif("s"), &compte_actif()).await;
-    assert!(matches!(solde, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        solde,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 
     let transactions = adapter
         .lister_transactions(
@@ -140,10 +152,16 @@ async fn ac3_adapter_sans_credentials_refuse_proprement_sur_toutes_les_operation
             NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
         )
         .await;
-    assert!(matches!(transactions, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        transactions,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 
     let revoque = adapter.revoquer_consentement(&consent_actif("s")).await;
-    assert!(matches!(revoque, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        revoque,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 }
 
 #[tokio::test]
@@ -159,7 +177,10 @@ async fn ac3_credentials_partiels_degradent_sans_paniquer() {
 
     let initie = adapter.initier_consentement(demande()).await;
 
-    assert!(matches!(initie, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        initie,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 }
 
 #[tokio::test]
@@ -168,7 +189,10 @@ async fn ac1_erreur_401_est_mappee_en_consentement_invalide() {
 
     let resultat = adapter.lister_comptes(&consent_actif("sess")).await;
 
-    assert!(matches!(resultat, Err(BankDataSourceError::ConsentementInvalide)));
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::ConsentementInvalide)
+    ));
 }
 
 #[tokio::test]
@@ -177,7 +201,10 @@ async fn ac1_erreur_403_est_mappee_en_consentement_invalide() {
 
     let resultat = adapter.lister_comptes(&consent_actif("sess")).await;
 
-    assert!(matches!(resultat, Err(BankDataSourceError::ConsentementInvalide)));
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::ConsentementInvalide)
+    ));
 }
 
 #[tokio::test]
@@ -186,7 +213,10 @@ async fn ac1_erreur_503_est_mappee_en_etablissement_indisponible() {
 
     let resultat = adapter.lister_comptes(&consent_actif("sess")).await;
 
-    assert!(matches!(resultat, Err(BankDataSourceError::EtablissementIndisponible)));
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::EtablissementIndisponible)
+    ));
 }
 
 #[tokio::test]
@@ -231,7 +261,10 @@ async fn ac1_corps_illisible_est_mappe_en_reponse_invalide() {
 
     let resultat = adapter.lister_comptes(&consent_actif("sess")).await;
 
-    assert!(matches!(resultat, Err(BankDataSourceError::ReponseInvalide(_))));
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::ReponseInvalide(_))
+    ));
 }
 
 #[tokio::test]
@@ -268,7 +301,8 @@ async fn ac1_session_sans_compte_renvoie_une_liste_vide() {
 
 #[tokio::test]
 async fn ac1_consent_id_reste_stable_de_l_initiation_a_la_completion() {
-    let reponse_init = r#"{"url":"https://banque.example/authorize?id=abc","authorization_id":"auth-cycle"}"#;
+    let reponse_init =
+        r#"{"url":"https://banque.example/authorize?id=abc","authorization_id":"auth-cycle"}"#;
     let reponse_complete = r#"{"session_id":"sess-cycle","status":"AUTHORIZED","accounts":[],"access":{"valid_until":"2026-09-01T00:00:00Z"}}"#;
     let adapter = source(vec![
         EchangeSimule::ok(reponse_init),
@@ -347,7 +381,10 @@ async fn ac4_construire_source_enablebanking_renvoie_un_adapter_reel_qui_degrade
 
     let resultat = source.initier_consentement(demande()).await;
 
-    assert!(matches!(resultat, Err(BankDataSourceError::SourceNonConfiguree)));
+    assert!(matches!(
+        resultat,
+        Err(BankDataSourceError::SourceNonConfiguree)
+    ));
 }
 
 #[tokio::test]

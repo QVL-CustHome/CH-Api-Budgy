@@ -92,7 +92,8 @@ impl CryptoService {
 }
 
 fn deriver_sous_cle(cle_maitre: &[u8], contexte: &[u8]) -> Result<[u8; 32], CryptoError> {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(cle_maitre).map_err(|_| CryptoError::InvalidKey)?;
+    let mut mac =
+        <HmacSha256 as Mac>::new_from_slice(cle_maitre).map_err(|_| CryptoError::InvalidKey)?;
     mac.update(contexte);
     Ok(mac.finalize().into_bytes().into())
 }

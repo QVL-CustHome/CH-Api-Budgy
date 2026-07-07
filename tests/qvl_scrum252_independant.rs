@@ -65,7 +65,10 @@ fn crypto() -> Arc<CryptoService> {
 fn etat(db: &DisposableDb) -> AppState {
     let crypto = crypto();
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),

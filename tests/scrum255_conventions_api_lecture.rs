@@ -68,7 +68,10 @@ fn bearer(owner: &str) -> String {
 
 fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),
@@ -207,7 +210,12 @@ async fn ac01_liste_paginee_respecte_limit_offset_par_defaut() {
         seed_transaction(&db, &crypto, &account, 100, date).await;
     }
 
-    let (status, corps) = get(&db, &crypto, &format!("/v1/accounts/{}/transactions", account.0)).await;
+    let (status, corps) = get(
+        &db,
+        &crypto,
+        &format!("/v1/accounts/{}/transactions", account.0),
+    )
+    .await;
     let body = body_json(&corps);
 
     assert_eq!(status, StatusCode::OK);
@@ -335,8 +343,12 @@ async fn ac02_enveloppe_identique_sur_accounts_et_transactions() {
     seed_transaction(&db, &crypto, &account, 250, jour(2026, 3, 1)).await;
 
     let (_, corps_accounts) = get(&db, &crypto, "/v1/accounts").await;
-    let (_, corps_transactions) =
-        get(&db, &crypto, &format!("/v1/accounts/{}/transactions", account.0)).await;
+    let (_, corps_transactions) = get(
+        &db,
+        &crypto,
+        &format!("/v1/accounts/{}/transactions", account.0),
+    )
+    .await;
     let accounts = body_json(&corps_accounts);
     let transactions = body_json(&corps_transactions);
 
@@ -428,8 +440,12 @@ async fn ac04_dates_serialisees_en_iso_8601() {
     let account = seed_account(&db, &crypto, consent, 0).await;
     seed_transaction(&db, &crypto, &account, 999, jour(2026, 4, 15)).await;
 
-    let (status, corps) =
-        get(&db, &crypto, &format!("/v1/accounts/{}/transactions", account.0)).await;
+    let (status, corps) = get(
+        &db,
+        &crypto,
+        &format!("/v1/accounts/{}/transactions", account.0),
+    )
+    .await;
     let body = body_json(&corps);
 
     assert_eq!(status, StatusCode::OK);
@@ -452,8 +468,12 @@ async fn ac05_transactions_restreintes_au_compte_demande() {
     seed_transaction(&db, &crypto, &compte_a, 200, jour(2026, 5, 2)).await;
     seed_transaction(&db, &crypto, &compte_b, 300, jour(2026, 5, 3)).await;
 
-    let (status, corps) =
-        get(&db, &crypto, &format!("/v1/accounts/{}/transactions", compte_a.0)).await;
+    let (status, corps) = get(
+        &db,
+        &crypto,
+        &format!("/v1/accounts/{}/transactions", compte_a.0),
+    )
+    .await;
     let body = body_json(&corps);
 
     assert_eq!(status, StatusCode::OK);
@@ -472,8 +492,12 @@ async fn ac06_perimetre_s1_expose_comptes_solde_et_transactions() {
     let (status_accounts, _) = get(&db, &crypto, "/v1/accounts").await;
     let (status_detail, corps_detail) =
         get(&db, &crypto, &format!("/v1/accounts/{}", account.0)).await;
-    let (status_transactions, _) =
-        get(&db, &crypto, &format!("/v1/accounts/{}/transactions", account.0)).await;
+    let (status_transactions, _) = get(
+        &db,
+        &crypto,
+        &format!("/v1/accounts/{}/transactions", account.0),
+    )
+    .await;
     let detail = body_json(&corps_detail);
 
     assert_eq!(status_accounts, StatusCode::OK);

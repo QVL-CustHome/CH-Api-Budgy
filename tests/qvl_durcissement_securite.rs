@@ -37,7 +37,10 @@ fn test_state() -> AppState {
     let crypto = Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap());
     AppState {
         consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
-        bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(db.clone(), crypto.clone())),
+        bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
+            db.clone(),
+            crypto.clone(),
+        )),
         bank_transactions: Arc::new(SqlxBankTransactionsWriteAdapter::new(
             db.clone(),
             crypto.clone(),

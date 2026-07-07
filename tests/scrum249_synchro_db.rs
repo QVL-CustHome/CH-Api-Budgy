@@ -96,14 +96,56 @@ async fn la_selection_ne_retient_que_les_comptes_echeants_actifs_sous_quota() {
     let crypto = crypto();
     let now = maintenant();
 
-    let actif_echu = consent(&db, &crypto, "echu", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let echu = compte(&db, &crypto, "echu", actif_echu, Some(now - Duration::hours(1))).await;
+    let actif_echu = consent(
+        &db,
+        &crypto,
+        "echu",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let echu = compte(
+        &db,
+        &crypto,
+        "echu",
+        actif_echu,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
-    let actif_futur = consent(&db, &crypto, "futur", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let _non_echu = compte(&db, &crypto, "futur", actif_futur, Some(now + Duration::hours(3))).await;
+    let actif_futur = consent(
+        &db,
+        &crypto,
+        "futur",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let _non_echu = compte(
+        &db,
+        &crypto,
+        "futur",
+        actif_futur,
+        Some(now + Duration::hours(3)),
+    )
+    .await;
 
-    let expire = consent(&db, &crypto, "expire", ConsentStatus::Active, Some(now - Duration::hours(1))).await;
-    let _compte_expire = compte(&db, &crypto, "expire", expire, Some(now - Duration::hours(1))).await;
+    let expire = consent(
+        &db,
+        &crypto,
+        "expire",
+        ConsentStatus::Active,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
+    let _compte_expire = compte(
+        &db,
+        &crypto,
+        "expire",
+        expire,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
     let lecteur = SqlxBankAccountsWriteAdapter::new(db.pool.clone(), crypto.clone());
     let echeants = lecteur
@@ -124,8 +166,22 @@ async fn reserver_creneau_respecte_le_quota_journalier() {
     let now = maintenant();
     let jour = now.date_naive();
 
-    let consent_id = consent(&db, &crypto, "quota", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let compte_id = compte(&db, &crypto, "quota", consent_id, Some(now - Duration::hours(1))).await;
+    let consent_id = consent(
+        &db,
+        &crypto,
+        "quota",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let compte_id = compte(
+        &db,
+        &crypto,
+        "quota",
+        consent_id,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
     let ecriture = SqlxBankAccountsWriteAdapter::new(db.pool.clone(), crypto.clone());
 
@@ -170,8 +226,22 @@ async fn reserver_creneau_reinitialise_le_compteur_au_changement_de_jour() {
     let crypto = crypto();
     let now = maintenant();
 
-    let consent_id = consent(&db, &crypto, "reset", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let compte_id = compte(&db, &crypto, "reset", consent_id, Some(now - Duration::hours(1))).await;
+    let consent_id = consent(
+        &db,
+        &crypto,
+        "reset",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let compte_id = compte(
+        &db,
+        &crypto,
+        "reset",
+        consent_id,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
     let ecriture = SqlxBankAccountsWriteAdapter::new(db.pool.clone(), crypto.clone());
 
@@ -224,8 +294,22 @@ async fn reserver_creneau_ne_depasse_pas_le_quota_sous_concurrence() {
     let now = maintenant();
     let jour = now.date_naive();
 
-    let consent_id = consent(&db, &crypto, "concurrence", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let compte_id = compte(&db, &crypto, "concurrence", consent_id, Some(now - Duration::hours(1))).await;
+    let consent_id = consent(
+        &db,
+        &crypto,
+        "concurrence",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let compte_id = compte(
+        &db,
+        &crypto,
+        "concurrence",
+        consent_id,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
     let tentatives = QUOTA * 5;
     let mut handles = Vec::with_capacity(tentatives as usize);
@@ -254,7 +338,10 @@ async fn reserver_creneau_ne_depasse_pas_le_quota_sous_concurrence() {
             reservations_reussies += 1;
         }
     }
-    assert_eq!(reservations_reussies, QUOTA, "le quota borne le nombre de réservations");
+    assert_eq!(
+        reservations_reussies, QUOTA,
+        "le quota borne le nombre de réservations"
+    );
 
     let lecteur = SqlxBankAccountsRepository::new(db.pool.clone());
     let relu = lecteur
@@ -277,8 +364,22 @@ async fn une_transaction_pending_devient_booked_sans_doublon() {
     let crypto = crypto();
     let now = maintenant();
 
-    let consent_id = consent(&db, &crypto, "tx", ConsentStatus::Active, Some(now + Duration::days(30))).await;
-    let compte_id = compte(&db, &crypto, "tx", consent_id, Some(now - Duration::hours(1))).await;
+    let consent_id = consent(
+        &db,
+        &crypto,
+        "tx",
+        ConsentStatus::Active,
+        Some(now + Duration::days(30)),
+    )
+    .await;
+    let compte_id = compte(
+        &db,
+        &crypto,
+        "tx",
+        consent_id,
+        Some(now - Duration::hours(1)),
+    )
+    .await;
 
     let ecriture = SqlxBankTransactionsWriteAdapter::new(db.pool.clone(), crypto.clone());
 
@@ -320,13 +421,12 @@ async fn une_transaction_pending_devient_booked_sans_doublon() {
     .expect("comptage");
     assert_eq!(total, 1, "aucun doublon ne doit subsister");
 
-    let statut: String = sqlx::query_scalar(
-        "SELECT status FROM budgy.bank_transaction WHERE bank_account_id = $1",
-    )
-    .bind(compte_id.0)
-    .fetch_one(&db.pool)
-    .await
-    .expect("lecture statut");
+    let statut: String =
+        sqlx::query_scalar("SELECT status FROM budgy.bank_transaction WHERE bank_account_id = $1")
+            .bind(compte_id.0)
+            .fetch_one(&db.pool)
+            .await
+            .expect("lecture statut");
     assert_eq!(statut, TransactionStatus::Booked.as_str());
 
     db.destroy().await;

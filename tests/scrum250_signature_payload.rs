@@ -52,8 +52,7 @@ fn moment() -> chrono::DateTime<Utc> {
 #[test]
 fn le_message_publie_est_signe_en_rs256() {
     let signataire = signataire();
-    let evenement =
-        EvenementSynchro::sync_started(proprietaire(), COMPTE.to_string(), moment());
+    let evenement = EvenementSynchro::sync_started(proprietaire(), COMPTE.to_string(), moment());
 
     let message = construire_payload(&evenement, ISSUER, &signataire).expect("payload signé");
     let header = decode_header(&message).expect("header JWT lisible");
@@ -65,20 +64,15 @@ fn le_message_publie_est_signe_en_rs256() {
 #[test]
 fn le_message_est_verifiable_avec_la_cle_publique() {
     let (signataire, cle_publique) = signataire_et_cle_publique();
-    let evenement = EvenementSynchro::sync_succeeded(
-        proprietaire(),
-        COMPTE.to_string(),
-        3,
-        moment(),
-    );
+    let evenement =
+        EvenementSynchro::sync_succeeded(proprietaire(), COMPTE.to_string(), 3, moment());
 
     let message = construire_payload(&evenement, ISSUER, &signataire).expect("payload signé");
 
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_required_spec_claims(&["exp"]);
     let cle = DecodingKey::from_rsa_pem(cle_publique.as_bytes()).expect("clé publique valide");
-    let donnees =
-        decode::<EnveloppeLue>(&message, &cle, &validation).expect("message vérifiable");
+    let donnees = decode::<EnveloppeLue>(&message, &cle, &validation).expect("message vérifiable");
 
     assert_eq!(donnees.claims.iss, ISSUER);
     assert_eq!(donnees.claims.sub, SUB);
@@ -105,12 +99,7 @@ fn les_topics_suivent_la_structure_par_type_d_evenement() {
             format!("budgy/{SUB}/sync/failed"),
         ),
         (
-            EvenementSynchro::account_transactions(
-                proprietaire(),
-                COMPTE.to_string(),
-                5,
-                moment(),
-            ),
+            EvenementSynchro::account_transactions(proprietaire(), COMPTE.to_string(), 5, moment()),
             format!("budgy/{SUB}/account/transactions"),
         ),
         (
@@ -138,18 +127,17 @@ fn le_sub_du_topic_est_un_identifiant_opaque() {
     let topic = topic_pour(PREFIXE, &evenement);
     let segment_sub = topic.split('/').nth(1).expect("segment sub présent");
 
-    assert!(Uuid::parse_str(segment_sub).is_ok(), "le sub doit rester un UUID opaque");
+    assert!(
+        Uuid::parse_str(segment_sub).is_ok(),
+        "le sub doit rester un UUID opaque"
+    );
 }
 
 #[test]
 fn le_payload_ne_contient_aucune_donnee_bancaire() {
     let (signataire, cle_publique) = signataire_et_cle_publique();
-    let evenement = EvenementSynchro::account_transactions(
-        proprietaire(),
-        COMPTE.to_string(),
-        7,
-        moment(),
-    );
+    let evenement =
+        EvenementSynchro::account_transactions(proprietaire(), COMPTE.to_string(), 7, moment());
 
     let message = construire_payload(&evenement, ISSUER, &signataire).expect("payload signé");
 
@@ -159,8 +147,20 @@ fn le_payload_ne_contient_aucune_donnee_bancaire() {
     let donnees =
         decode::<serde_json::Value>(&message, &cle, &validation).expect("payload décodable");
 
-    let objet = donnees.claims.as_object().expect("payload est un objet json");
-    let cles_autorisees = ["iss", "sub", "event_type", "account", "count", "at", "iat", "exp"];
+    let objet = donnees
+        .claims
+        .as_object()
+        .expect("payload est un objet json");
+    let cles_autorisees = [
+        "iss",
+        "sub",
+        "event_type",
+        "account",
+        "count",
+        "at",
+        "iat",
+        "exp",
+    ];
     for cle in objet.keys() {
         assert!(
             cles_autorisees.contains(&cle.as_str()),
@@ -168,7 +168,15 @@ fn le_payload_ne_contient_aucune_donnee_bancaire() {
         );
     }
 
-    let interdits = ["amount", "amount_cents", "balance", "iban", "label", "currency", "montant"];
+    let interdits = [
+        "amount",
+        "amount_cents",
+        "balance",
+        "iban",
+        "label",
+        "currency",
+        "montant",
+    ];
     let brut = donnees.claims.to_string().to_lowercase();
     for terme in interdits {
         assert!(

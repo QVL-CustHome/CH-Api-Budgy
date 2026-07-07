@@ -34,8 +34,13 @@ impl SqlxConsentsRepository {
         nouveau: NouveauConsent,
     ) -> Result<ConsentId, ChiffrementError> {
         let owner = &nouveau.proprietaire.0;
-        let external_ref =
-            chiffrer_texte(crypto, owner, TABLE, FIELD_EXTERNAL_REF, &nouveau.external_ref)?;
+        let external_ref = chiffrer_texte(
+            crypto,
+            owner,
+            TABLE,
+            FIELD_EXTERNAL_REF,
+            &nouveau.external_ref,
+        )?;
 
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO budgy.consent (owner_id, external_ref, status, expires_at, key_version) \
@@ -58,8 +63,13 @@ impl SqlxConsentsRepository {
         nouveau: NouveauConsentInitie,
     ) -> Result<ConsentId, ChiffrementError> {
         let owner = &nouveau.proprietaire.0;
-        let external_ref =
-            chiffrer_texte(crypto, owner, TABLE, FIELD_EXTERNAL_REF, &nouveau.external_ref)?;
+        let external_ref = chiffrer_texte(
+            crypto,
+            owner,
+            TABLE,
+            FIELD_EXTERNAL_REF,
+            &nouveau.external_ref,
+        )?;
 
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO budgy.consent (id, owner_id, external_ref, etablissement, status, expires_at, key_version) \
@@ -358,11 +368,24 @@ type ConsentRow = (
 );
 
 fn into_consent(crypto: &CryptoService, row: ConsentRow) -> Result<Consent, ChiffrementError> {
-    let (id, owner_id, external_ref_blob, etablissement, status, expires_at, created_at, updated_at) =
-        row;
+    let (
+        id,
+        owner_id,
+        external_ref_blob,
+        etablissement,
+        status,
+        expires_at,
+        created_at,
+        updated_at,
+    ) = row;
 
-    let external_ref =
-        dechiffrer_texte(crypto, &owner_id, TABLE, FIELD_EXTERNAL_REF, &external_ref_blob)?;
+    let external_ref = dechiffrer_texte(
+        crypto,
+        &owner_id,
+        TABLE,
+        FIELD_EXTERNAL_REF,
+        &external_ref_blob,
+    )?;
     let status = ConsentStatus::parse(&status)
         .ok_or_else(|| ChiffrementError::UnknownEnum(status.clone()))?;
 

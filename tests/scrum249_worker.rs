@@ -11,9 +11,7 @@ struct CycleCompteur {
 }
 
 impl CycleSynchro for CycleCompteur {
-    fn executer_cycle(
-        &self,
-    ) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send {
+    fn executer_cycle(&self) -> impl Future<Output = Result<RapportSynchro, SynchroError>> + Send {
         self.executions.fetch_add(1, Ordering::SeqCst);
         async { Ok(RapportSynchro::default()) }
     }
@@ -46,7 +44,10 @@ async fn le_worker_execute_des_cycles_puis_s_arrete_proprement() {
     worker.arreter().await;
 
     let executions = cycle.executions.load(Ordering::SeqCst);
-    assert!(executions >= 1, "au moins un cycle exécuté, observé {executions}");
+    assert!(
+        executions >= 1,
+        "au moins un cycle exécuté, observé {executions}"
+    );
 
     let stable = cycle.executions.load(Ordering::SeqCst);
     tokio::time::sleep(Duration::from_millis(60)).await;

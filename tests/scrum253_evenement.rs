@@ -255,12 +255,8 @@ async fn revocation_appelee_pour_chaque_consentement_actif() {
     let comptes = ComptesEnMemoire::default();
     let source = Arc::new(SourceRevocation::nouvelle(false));
 
-    let service = EffacementProprietaire::new(
-        consents.clone(),
-        consents.clone(),
-        comptes,
-        source.clone(),
-    );
+    let service =
+        EffacementProprietaire::new(consents.clone(), consents.clone(), comptes, source.clone());
     let rapport = service
         .effacer_donnees_proprietaire(ProprietaireId(SUB.to_string()))
         .await
@@ -295,11 +291,5 @@ async fn suppression_locale_aboutit_meme_si_revocation_fournisseur_echoue() {
     assert_eq!(rapport.revocations_echouees, 1);
     assert_eq!(rapport.consentements_supprimes, 1);
     assert_eq!(comptes.supprimes.load(Ordering::SeqCst), 1);
-    assert!(
-        consents
-            .actifs
-            .lock()
-            .expect("verrou actifs")
-            .is_empty()
-    );
+    assert!(consents.actifs.lock().expect("verrou actifs").is_empty());
 }

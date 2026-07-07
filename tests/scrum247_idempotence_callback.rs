@@ -53,7 +53,10 @@ fn bearer(owner: &str) -> String {
 fn state(db: &DisposableDb) -> AppState {
     let crypto = Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap());
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),

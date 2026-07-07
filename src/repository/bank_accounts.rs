@@ -212,13 +212,12 @@ impl SqlxBankAccountsRepository {
         proprietaire: &ProprietaireId,
         compte: &BankAccountId,
     ) -> Result<bool, ChiffrementError> {
-        let existe: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM budgy.bank_account WHERE id = $1 AND owner_id = $2",
-        )
-        .bind(compte.0)
-        .bind(&proprietaire.0)
-        .fetch_optional(&self.db)
-        .await?;
+        let existe: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM budgy.bank_account WHERE id = $1 AND owner_id = $2")
+                .bind(compte.0)
+                .bind(&proprietaire.0)
+                .fetch_optional(&self.db)
+                .await?;
         Ok(existe.is_some())
     }
 

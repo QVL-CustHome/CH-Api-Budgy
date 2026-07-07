@@ -74,7 +74,10 @@ fn crypto() -> Arc<CryptoService> {
 fn state(db: &DisposableDb) -> AppState {
     let crypto = crypto();
     AppState {
-        consents: Arc::new(SqlxConsentsWriteAdapter::new(db.pool.clone(), crypto.clone())),
+        consents: Arc::new(SqlxConsentsWriteAdapter::new(
+            db.pool.clone(),
+            crypto.clone(),
+        )),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),
@@ -185,7 +188,10 @@ async fn forcer_expiration(db: &DisposableDb, consent_id: &str) {
         .expect("forçage de l'expiration");
 }
 
-async fn etat_consent(db: &DisposableDb, consent_id: &str) -> (String, Vec<u8>, Option<DateTime<Utc>>) {
+async fn etat_consent(
+    db: &DisposableDb,
+    consent_id: &str,
+) -> (String, Vec<u8>, Option<DateTime<Utc>>) {
     sqlx::query_as::<_, (String, Vec<u8>, Option<DateTime<Utc>>)>(
         "SELECT status, external_ref, expires_at FROM budgy.consent WHERE id = $1",
     )

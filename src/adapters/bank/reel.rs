@@ -40,7 +40,9 @@ impl<T: TransportHttp> EnableBankingBankDataSource<T> {
     }
 }
 
-fn construire_client(config: &EnableBankingConfig) -> Option<ClientEnableBanking<ReqwestTransport>> {
+fn construire_client(
+    config: &EnableBankingConfig,
+) -> Option<ClientEnableBanking<ReqwestTransport>> {
     let app_id = config.app_id.as_ref()?;
     let redirect_url = config.redirect_url.as_ref()?;
     let pem = charger_pem(config)?;

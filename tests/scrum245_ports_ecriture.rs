@@ -234,12 +234,13 @@ async fn le_port_bank_transactions_enregistre_puis_signale_le_doublon_au_rejeu()
     assert_eq!(relu.external_transaction_id, EXTERNAL_TX_CLAIR);
     assert_eq!(relu.label, LABEL_CLAIR);
 
-    let total: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM budgy.bank_transaction WHERE bank_account_id = $1")
-            .bind(account_id.0)
-            .fetch_one(&db.pool)
-            .await
-            .expect("comptage transactions");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM budgy.bank_transaction WHERE bank_account_id = $1",
+    )
+    .bind(account_id.0)
+    .fetch_one(&db.pool)
+    .await
+    .expect("comptage transactions");
     assert_eq!(total, 1, "aucun doublon ne doit subsister après le rejeu");
 
     db.destroy().await;

@@ -340,7 +340,8 @@ async fn ac03_colonnes_sensibles_stockees_en_bytea_chiffre() {
         "consent.external_ref doit être chiffré"
     );
 
-    let external_account = raw_bytea(&db.pool, "bank_account", "external_account_id", account_id).await;
+    let external_account =
+        raw_bytea(&db.pool, "bank_account", "external_account_id", account_id).await;
     assert!(
         ne_contient_pas_clair(&external_account, EXTERNAL_ACCOUNT_CLAIR),
         "bank_account.external_account_id doit être chiffré"

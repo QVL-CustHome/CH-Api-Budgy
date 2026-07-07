@@ -142,7 +142,10 @@ impl std::fmt::Debug for EnableBankingConfig {
         f.debug_struct("EnableBankingConfig")
             .field("base_url", &self.base_url)
             .field("app_id", &self.app_id.as_ref().map(|_| "***"))
-            .field("private_key_pem", &self.private_key_pem.as_ref().map(|_| "***"))
+            .field(
+                "private_key_pem",
+                &self.private_key_pem.as_ref().map(|_| "***"),
+            )
             .field("private_key_path", &self.private_key_path)
             .field("redirect_url", &self.redirect_url)
             .finish()

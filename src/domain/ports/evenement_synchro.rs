@@ -120,10 +120,7 @@ impl EvenementSynchro {
         }
     }
 
-    pub fn consent_renewal_required(
-        proprietaire: ProprietaireId,
-        at: DateTime<Utc>,
-    ) -> Self {
+    pub fn consent_renewal_required(proprietaire: ProprietaireId, at: DateTime<Utc>) -> Self {
         Self {
             proprietaire,
             type_evenement: TypeEvenementSynchro::ConsentRenewalRequired,
@@ -145,10 +142,8 @@ impl EvenementSynchro {
 }
 
 pub trait EventPublisher: Send + Sync + 'static {
-    fn publier(
-        &self,
-        evenement: EvenementSynchro,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    fn publier(&self, evenement: EvenementSynchro)
+    -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
 pub struct NoopEventPublisher;
