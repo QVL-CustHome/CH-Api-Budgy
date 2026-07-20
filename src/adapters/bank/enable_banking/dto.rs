@@ -46,13 +46,48 @@ pub struct DemandeSession {
 
 #[derive(Debug, Deserialize)]
 pub struct ReponseSession {
-    pub session_id: String,
+    // Absent en Restricted Production (EnableBanking ne renvoie pas de session_id).
+    #[serde(default)]
+    pub session_id: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
+    // Full production : liste d'objets compte. Restricted : liste d'uids (strings).
     #[serde(default)]
-    pub accounts: Vec<CompteSession>,
+    pub accounts: Vec<CompteRef>,
+    // Restricted Production : les objets compte sont ici (uid + hashes).
+    #[serde(default)]
+    pub accounts_data: Vec<CompteSession>,
     #[serde(default)]
     pub access: Option<AccessSession>,
+}
+
+// Un compte dans la reponse peut etre soit un objet (full prod), soit un simple
+// uid string (restricted). On accepte les deux.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum CompteRef {
+    Objet(CompteSession),
+    Uid(String),
+}
+
+impl ReponseSession {
+    // Normalise la liste des comptes quelle que soit la forme de la reponse.
+    pub fn comptes(&self) -> Vec<CompteSession> {
+        if !self.accounts_data.is_empty() {
+            return self.accounts_data.clone();
+        }
+        self.accounts
+            .iter()
+            .map(|a| match a {
+                CompteRef::Objet(compte) => compte.clone(),
+                CompteRef::Uid(uid) => CompteSession {
+                    uid: uid.clone(),
+                    account_id: None,
+                    currency: None,
+                },
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +96,7 @@ pub struct AccessSession {
     pub valid_until: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CompteSession {
     pub uid: String,
     #[serde(default)]
@@ -70,7 +105,7 @@ pub struct CompteSession {
     pub currency: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct IdentifiantCompte {
     #[serde(default)]
     pub iban: Option<String>,

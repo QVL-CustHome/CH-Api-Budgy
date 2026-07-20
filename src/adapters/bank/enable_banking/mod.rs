@@ -4,8 +4,8 @@ pub mod mapping;
 pub mod transport;
 
 use crate::adapters::bank::enable_banking::dto::{
-    AccessDemande, AspspReference, DemandeAuth, DemandeSession, ReponseAspsps, ReponseAuth,
-    ReponseBalances, ReponseSession, ReponseTransactions,
+    AccessDemande, AspspReference, CompteSession, DemandeAuth, DemandeSession, ReponseAspsps,
+    ReponseAuth, ReponseBalances, ReponseSession, ReponseTransactions,
 };
 use crate::adapters::bank::enable_banking::jwt::SignataireJwt;
 use crate::adapters::bank::enable_banking::mapping::{
@@ -184,10 +184,26 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or(horodatage + Duration::days(VALIDITE_CONSENTEMENT_JOURS));
 
+        // En restricted production, EnableBanking ne renvoie pas de session_id :
+        // on encode alors les uids de comptes dans external_ref, pour que
+        // lister_comptes puisse les reconstruire sans re-fetch de session.
+        let external_ref = match session.session_id.clone().filter(|s| !s.trim().is_empty()) {
+            Some(sid) => sid,
+            None => format!(
+                "uids:{}",
+                session
+                    .comptes()
+                    .iter()
+                    .map(|c| c.uid.clone())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        };
+
         Ok(Consent {
             id: consent_id,
             proprietaire: proprietaire.clone(),
-            external_ref: session.session_id,
+            external_ref,
             etablissement: None,
             status: ConsentStatus::Active,
             expires_at: Some(expires_at),
@@ -201,11 +217,27 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
         consent: &Consent,
         horodatage: DateTime<Utc>,
     ) -> Result<Vec<BankAccount>, BankDataSourceError> {
+        // Restricted production : external_ref encode les uids (aucune session a re-fetch).
+        if let Some(uids) = consent.external_ref.strip_prefix("uids:") {
+            return Ok(uids
+                .split(',')
+                .filter(|u| !u.trim().is_empty())
+                .map(|uid| {
+                    let compte = CompteSession {
+                        uid: uid.to_string(),
+                        account_id: None,
+                        currency: None,
+                    };
+                    vers_bank_account(&compte, consent, horodatage)
+                })
+                .collect());
+        }
+        // Full production : re-fetch la session par son id.
         let chemin = format!("/sessions/{}", consent.external_ref);
         let http = self.appeler(MethodeHttp::Get, chemin, None).await?;
         let session: ReponseSession = Self::deserialiser(&http.corps)?;
         Ok(session
-            .accounts
+            .comptes()
             .iter()
             .map(|compte| vers_bank_account(compte, consent, horodatage))
             .collect())
