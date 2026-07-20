@@ -98,11 +98,19 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
     ) -> Result<ConsentementInitie, BankDataSourceError> {
         let valid_until = (horodatage + Duration::days(VALIDITE_CONSENTEMENT_JOURS)).to_rfc3339();
         let state = demande.consent_id.0.to_string();
+        // L'identifiant d'etablissement expose a l'UI a le format "nom|pays"
+        // (cf. vers_etablissement). EnableBanking /auth attend le NOM exact de
+        // l'ASPSP et son pays separement -> on re-decoupe sur le dernier '|'
+        // (sinon le suffixe "|FR" fait echouer /auth en 422 WRONG_ASPSP).
+        let (aspsp_name, aspsp_country) = match demande.etablissement.rsplit_once('|') {
+            Some((nom, pays)) if !pays.is_empty() => (nom.to_string(), pays.to_string()),
+            _ => (demande.etablissement.clone(), PAYS_DEFAUT.to_string()),
+        };
         let corps = DemandeAuth {
             access: AccessDemande { valid_until },
             aspsp: AspspReference {
-                name: demande.etablissement.clone(),
-                country: PAYS_DEFAUT.to_string(),
+                name: aspsp_name,
+                country: aspsp_country,
             },
             state: state.clone(),
             redirect_url: self.url_retour(&demande),
