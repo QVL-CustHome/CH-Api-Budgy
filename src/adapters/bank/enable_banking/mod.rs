@@ -88,7 +88,18 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
             .appeler(MethodeHttp::Get, "/aspsps".to_string(), None)
             .await?;
         let aspsps: ReponseAspsps = Self::deserialiser(&reponse.corps)?;
-        Ok(aspsps.aspsps.iter().map(vers_etablissement).collect())
+        // Restriction volontaire des banques proposees : uniquement les caisses
+        // Credit Agricole (toutes contiennent "agricole", insensible aux accents)
+        // et Boursorama ("bourso"). Evite de noyer l'UI sous les 126 ASPSP FR.
+        Ok(aspsps
+            .aspsps
+            .iter()
+            .filter(|a| {
+                let nom = a.name.to_lowercase();
+                nom.contains("agricole") || nom.contains("bourso")
+            })
+            .map(vers_etablissement)
+            .collect())
     }
 
     pub async fn initier_consentement(
