@@ -285,6 +285,11 @@ fn verifier_statut(reponse: &ReponseHttp) -> Result<(), BankDataSourceError> {
     if reponse.est_succes() {
         return Ok(());
     }
+    tracing::warn!(
+        statut = reponse.statut,
+        corps = %reponse.corps,
+        "EnableBanking : reponse non-2xx"
+    );
     match reponse.statut {
         401 | 403 => Err(BankDataSourceError::ConsentementInvalide),
         404 => Err(BankDataSourceError::RessourceIntrouvable),
