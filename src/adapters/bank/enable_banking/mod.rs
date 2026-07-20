@@ -71,7 +71,14 @@ impl<T: TransportHttp> ClientEnableBanking<T> {
     }
 
     fn deserialiser<R: DeserializeOwned>(corps: &str) -> Result<R, BankDataSourceError> {
-        serde_json::from_str(corps).map_err(|e| BankDataSourceError::ReponseInvalide(e.to_string()))
+        serde_json::from_str(corps).map_err(|e| {
+            tracing::warn!(
+                erreur = %e,
+                corps = %corps,
+                "EnableBanking : echec de deserialisation"
+            );
+            BankDataSourceError::ReponseInvalide(e.to_string())
+        })
     }
 
     fn url_retour(&self, demande: &DemandeConsentement) -> String {
