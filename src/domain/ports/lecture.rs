@@ -43,8 +43,17 @@ pub trait ConsentsReadRepository: Send + Sync {
     ) -> impl Future<Output = Result<Option<Consent>, LectureError>> + Send;
 }
 
+#[derive(Debug, Clone)]
+pub struct CategorieAvecCompteur {
+    pub category: Category,
+    pub transaction_count: i64,
+}
+
 pub trait CategoriesReadRepository: Send + Sync {
-    fn lister(&self) -> impl Future<Output = Result<Vec<Category>, LectureError>> + Send;
+    fn lister_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<CategorieAvecCompteur>, LectureError>> + Send;
 }
 
 pub trait BankAccountsReadRepository: Send + Sync {

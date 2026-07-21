@@ -1,5 +1,6 @@
 use crate::domain::balance::{BalanceId, NouvelleBalance};
 use crate::domain::bank_account::{BankAccountId, NouveauBankAccount, PlanificationSynchro};
+use crate::domain::category::{Category, CategoryId, MiseAJourCategorie, NouvelleCategorie};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{
     ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
@@ -50,6 +51,26 @@ pub trait ConsentsWriteRepository: Send + Sync {
         &self,
         proprietaire: &ProprietaireId,
     ) -> impl Future<Output = Result<u64, EcritureError>> + Send;
+}
+
+pub trait CategoriesWriteRepository: Send + Sync {
+    fn creer(
+        &self,
+        nouvelle: NouvelleCategorie,
+    ) -> impl Future<Output = Result<Category, EcritureError>> + Send;
+
+    fn mettre_a_jour(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &CategoryId,
+        mise_a_jour: MiseAJourCategorie,
+    ) -> impl Future<Output = Result<Option<Category>, EcritureError>> + Send;
+
+    fn supprimer(
+        &self,
+        proprietaire: &ProprietaireId,
+        id: &CategoryId,
+    ) -> impl Future<Output = Result<bool, EcritureError>> + Send;
 }
 
 pub trait BankAccountsWriteRepository: Send + Sync {
