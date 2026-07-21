@@ -29,6 +29,10 @@ fn public_routes() -> Router<AppState> {
             get(handlers::comptes::list_account_transactions),
         )
         .route(
+            "/accounts/{account_id}/transactions/{transaction_id}/category",
+            put(handlers::comptes::categorize_transaction),
+        )
+        .route(
             "/categories",
             get(handlers::categories::list_categories).post(handlers::categories::create_category),
         )

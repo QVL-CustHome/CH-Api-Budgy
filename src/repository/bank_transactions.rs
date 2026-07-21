@@ -7,11 +7,11 @@ use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
 };
 use crate::domain::ports::lecture::{
-    LectureError, LectureResultat, Tranche, TransactionsBancairesReadRepository,
+    FiltreTransactions, LectureError, LectureResultat, Tranche, TransactionsBancairesReadRepository,
 };
 use crate::domain::transaction_bancaire::{
-    CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
-    TransactionStatus,
+    CategorisationTransaction, CategorizationSource, NouvelleTransactionBancaire,
+    TransactionBancaire, TransactionBancaireId, TransactionStatus,
 };
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
@@ -125,29 +125,36 @@ impl SqlxBankTransactionsRepository {
         crypto: &CryptoService,
         proprietaire: &ProprietaireId,
         compte: &BankAccountId,
+        filtre: FiltreTransactions,
         tranche: Tranche,
     ) -> Result<LectureResultat<TransactionBancaire>, ChiffrementError> {
-        let total: i64 = sqlx::query_scalar(
+        let condition_categorisation = if filtre.non_categorisees {
+            " AND t.category_id IS NULL"
+        } else {
+            ""
+        };
+
+        let total: i64 = sqlx::query_scalar(&format!(
             "SELECT count(*) FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
-             WHERE t.bank_account_id = $1 AND a.owner_id = $2",
-        )
+             WHERE t.bank_account_id = $1 AND a.owner_id = $2{condition_categorisation}"
+        ))
         .bind(compte.0)
         .bind(&proprietaire.0)
         .fetch_one(&self.db)
         .await?;
 
-        let rows = sqlx::query_as::<_, BankTransactionRow>(
+        let rows = sqlx::query_as::<_, BankTransactionRow>(&format!(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
              t.category_id, t.categorization_source, t.rule_id, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
-             WHERE t.bank_account_id = $1 AND a.owner_id = $2 \
+             WHERE t.bank_account_id = $1 AND a.owner_id = $2{condition_categorisation} \
              ORDER BY t.booking_date DESC NULLS FIRST, t.value_date DESC NULLS LAST, \
              t.created_at DESC \
-             LIMIT $3 OFFSET $4",
-        )
+             LIMIT $3 OFFSET $4"
+        ))
         .bind(compte.0)
         .bind(&proprietaire.0)
         .bind(i64::from(tranche.limit))
@@ -164,6 +171,61 @@ impl SqlxBankTransactionsRepository {
             elements,
             total: total.max(0) as u64,
         })
+    }
+
+    pub async fn categoriser(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        transaction: &TransactionBancaireId,
+        category: &CategoryId,
+    ) -> Result<CategorisationTransaction, ChiffrementError> {
+        if !self.categorie_accessible(proprietaire, category).await? {
+            return Ok(CategorisationTransaction::CategorieIntrouvable);
+        }
+
+        let mise_a_jour: Option<Uuid> = sqlx::query_scalar(
+            "UPDATE budgy.bank_transaction AS t \
+             SET category_id = $1, categorization_source = $2, rule_id = NULL \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id \
+             AND t.id = $3 AND t.bank_account_id = $4 AND a.owner_id = $5 \
+             RETURNING t.id",
+        )
+        .bind(category.0)
+        .bind(CategorizationSource::Manual.as_str())
+        .bind(transaction.0)
+        .bind(compte.0)
+        .bind(&proprietaire.0)
+        .fetch_optional(&self.db)
+        .await?;
+
+        if mise_a_jour.is_none() {
+            return Ok(CategorisationTransaction::TransactionIntrouvable);
+        }
+
+        match self.fetch(crypto, transaction).await? {
+            Some(transaction) => Ok(CategorisationTransaction::Categorisee(transaction)),
+            None => Ok(CategorisationTransaction::TransactionIntrouvable),
+        }
+    }
+
+    async fn categorie_accessible(
+        &self,
+        proprietaire: &ProprietaireId,
+        category: &CategoryId,
+    ) -> Result<bool, ChiffrementError> {
+        let existe: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM budgy.category \
+             WHERE id = $1 AND (owner_id IS NULL OR owner_id = $2)",
+        )
+        .bind(category.0)
+        .bind(&proprietaire.0)
+        .fetch_optional(&self.db)
+        .await?;
+
+        Ok(existe.is_some())
     }
 
     async fn owner_du_compte(
@@ -192,6 +254,19 @@ impl SqlxBankTransactionsWriteAdapter {
             crypto,
         }
     }
+
+    pub async fn categoriser(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        transaction: &TransactionBancaireId,
+        category: &CategoryId,
+    ) -> Result<CategorisationTransaction, EcritureError> {
+        self.repo
+            .categoriser(&self.crypto, proprietaire, compte, transaction, category)
+            .await
+            .map_err(vers_ecriture_error)
+    }
 }
 
 impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
@@ -211,10 +286,11 @@ impl TransactionsBancairesReadRepository for SqlxBankTransactionsWriteAdapter {
         &self,
         proprietaire: &ProprietaireId,
         compte: &BankAccountId,
+        filtre: FiltreTransactions,
         tranche: Tranche,
     ) -> Result<LectureResultat<TransactionBancaire>, LectureError> {
         self.repo
-            .lister_par_compte(&self.crypto, proprietaire, compte, tranche)
+            .lister_par_compte(&self.crypto, proprietaire, compte, filtre, tranche)
             .await
             .map_err(|e| LectureError::Acces(e.to_string()))
     }
