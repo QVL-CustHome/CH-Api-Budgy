@@ -5,6 +5,7 @@ use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
+use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::{
     CategorizationSource, TransactionBancaire, TransactionStatus,
 };
@@ -86,6 +87,35 @@ pub struct CategoryRequest {
     pub color: Option<String>,
     #[serde(default)]
     pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateCategorizationRuleRequest {
+    pub label_pattern: String,
+    pub category_id: Uuid,
+    #[serde(default)]
+    pub priority: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategorizationRuleDto {
+    pub id: Uuid,
+    pub label_pattern: String,
+    pub category_id: Uuid,
+    pub priority: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<RegleCategorisation> for CategorizationRuleDto {
+    fn from(regle: RegleCategorisation) -> Self {
+        Self {
+            id: regle.id.0,
+            label_pattern: regle.label_pattern,
+            category_id: regle.category_id.0,
+            priority: regle.priority,
+            created_at: regle.created_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

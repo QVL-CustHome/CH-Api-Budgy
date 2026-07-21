@@ -41,6 +41,10 @@ fn public_routes() -> Router<AppState> {
             put(handlers::categories::update_category)
                 .delete(handlers::categories::delete_category),
         )
+        .route(
+            "/categorization-rules",
+            post(handlers::regles_categorisation::create_rule),
+        )
         .route("/banks", get(handlers::banques::list_banks))
         .route(
             "/consents",

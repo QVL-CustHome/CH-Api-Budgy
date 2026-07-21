@@ -5,6 +5,7 @@ use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{
     ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
 };
+use crate::domain::regle_categorisation::{NouvelleRegleCategorisation, RegleCategorisation};
 use crate::domain::transaction_bancaire::{NouvelleTransactionBancaire, TransactionBancaireId};
 use std::future::Future;
 
@@ -71,6 +72,13 @@ pub trait CategoriesWriteRepository: Send + Sync {
         proprietaire: &ProprietaireId,
         id: &CategoryId,
     ) -> impl Future<Output = Result<bool, EcritureError>> + Send;
+}
+
+pub trait ReglesCategorisationWriteRepository: Send + Sync {
+    fn creer(
+        &self,
+        nouvelle: NouvelleRegleCategorisation,
+    ) -> impl Future<Output = Result<Option<RegleCategorisation>, EcritureError>> + Send;
 }
 
 pub trait BankAccountsWriteRepository: Send + Sync {
