@@ -512,14 +512,12 @@ async fn ac06_perimetre_s1_expose_comptes_solde_et_transactions() {
 }
 
 #[tokio::test]
-async fn ac06_endpoints_categories_et_budgets_absents_en_s1() {
+async fn ac06_endpoint_budgets_absent() {
     let db = db_or_skip!();
     let crypto = crypto();
 
-    let (status_categories, _) = get(&db, &crypto, "/v1/categories").await;
     let (status_budgets, _) = get(&db, &crypto, "/v1/budgets").await;
 
-    assert_eq!(status_categories, StatusCode::NOT_FOUND);
     assert_eq!(status_budgets, StatusCode::NOT_FOUND);
 
     db.destroy().await;

@@ -128,7 +128,7 @@ macro_rules! db_ou_skip {
 }
 
 fn requete_categorie(nom: &str, kind: &str) -> Value {
-    json!({ "name": nom, "type": kind })
+    json!({ "name": nom, "kind": kind })
 }
 
 async fn lister(db: &DisposableDb, sub: &str) -> Value {
