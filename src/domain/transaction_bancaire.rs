@@ -30,10 +30,6 @@ impl CategorizationSource {
             _ => None,
         }
     }
-
-    pub fn permet_categorisation_par_regle(&self) -> bool {
-        !matches!(self, CategorizationSource::Manual)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
