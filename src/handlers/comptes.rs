@@ -3,12 +3,17 @@ use crate::api::extractors::{ApiPath, ApiQuery};
 use crate::api::query::ListQuery;
 use crate::api::response::ListResponse;
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::lecture::{
-    ComptesBancairesReadRepository, Tranche, TransactionsBancairesReadRepository,
+    ComptesBancairesReadRepository, FiltreTransactions, Tranche,
+    TransactionsBancairesReadRepository,
 };
+use crate::domain::transaction_bancaire::{CategorisationTransaction, TransactionBancaireId};
 use crate::extract::BudgyUser;
-use crate::handlers::dto::{BankAccountSummaryDto, BankTransactionDto};
+use crate::handlers::dto::{
+    BankAccountSummaryDto, BankTransactionDto, CategorizeTransactionRequest,
+};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -75,11 +80,16 @@ pub async fn list_account_transactions(
         return Err(ApiError::not_found("compte introuvable"));
     }
 
+    let filtre = FiltreTransactions {
+        non_categorisees: query.uncategorized.unwrap_or(false),
+    };
+
     let resultat = state
         .bank_transactions
         .lister_par_compte(
             &proprietaire,
             &compte,
+            filtre,
             Tranche {
                 limit: pagination.limit,
                 offset: pagination.offset,
@@ -93,4 +103,35 @@ pub async fn list_account_transactions(
         .map(BankTransactionDto::from)
         .collect();
     Ok(Json(ListResponse::new(data, resultat.total)))
+}
+
+pub async fn categorize_transaction(
+    user: BudgyUser,
+    State(state): State<AppState>,
+    ApiPath((account_id, transaction_id)): ApiPath<(Uuid, Uuid)>,
+    Json(payload): Json<CategorizeTransactionRequest>,
+) -> Result<Json<BankTransactionDto>, ApiError> {
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
+
+    let resultat = state
+        .bank_transactions
+        .categoriser(
+            &proprietaire,
+            &BankAccountId(account_id),
+            &TransactionBancaireId(transaction_id),
+            &CategoryId(payload.category_id),
+        )
+        .await?;
+
+    match resultat {
+        CategorisationTransaction::Categorisee(transaction) => {
+            Ok(Json(BankTransactionDto::from(transaction)))
+        }
+        CategorisationTransaction::TransactionIntrouvable => {
+            Err(ApiError::not_found("transaction introuvable"))
+        }
+        CategorisationTransaction::CategorieIntrouvable => {
+            Err(ApiError::not_found("catégorie introuvable"))
+        }
+    }
 }
