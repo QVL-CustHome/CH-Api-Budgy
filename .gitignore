@@ -7,3 +7,6 @@
 
 .claude/settings.local.json
 .jira/
+
+# Logs runtime (jamais commités)
+.startup-budgy.log
