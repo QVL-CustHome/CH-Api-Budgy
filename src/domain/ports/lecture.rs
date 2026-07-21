@@ -1,5 +1,6 @@
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::{BankAccount, BankAccountId, CompteASynchroniser};
+use crate::domain::category::Category;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::transaction_bancaire::TransactionBancaire;
@@ -40,6 +41,10 @@ pub trait ConsentsReadRepository: Send + Sync {
         proprietaire: &ProprietaireId,
         id: &ConsentId,
     ) -> impl Future<Output = Result<Option<Consent>, LectureError>> + Send;
+}
+
+pub trait CategoriesReadRepository: Send + Sync {
+    fn lister(&self) -> impl Future<Output = Result<Vec<Category>, LectureError>> + Send;
 }
 
 pub trait BankAccountsReadRepository: Send + Sync {
