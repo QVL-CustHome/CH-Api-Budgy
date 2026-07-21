@@ -45,10 +45,7 @@ macro_rules! db_or_skip {
                 db
             }
             None => {
-                eprintln!(
-                    "SCRUM-233 ignoré : variable {} absente (Postgres jetable requis)",
-                    common::ENV_ADMIN_URL
-                );
+                eprintln!("SCRUM-233 : base de test indisponible, test ignoré");
                 return;
             }
         }
