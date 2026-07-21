@@ -30,6 +30,18 @@ pub async fn create_rule(
         .await?
         .ok_or_else(|| ApiError::not_found("catégorie introuvable"))?;
 
+    if let Err(erreur) = state
+        .bank_transactions
+        .appliquer_regle_retroactif(&regle)
+        .await
+    {
+        tracing::warn!(
+            erreur = %erreur,
+            regle_id = %regle.id.0,
+            "application rétroactive de la règle ignorée"
+        );
+    }
+
     Ok((
         StatusCode::CREATED,
         Json(CategorizationRuleDto::from(regle)),
