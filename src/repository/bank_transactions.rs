@@ -7,8 +7,10 @@ use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
 };
 use crate::domain::ports::lecture::{
-    FiltreTransactions, LectureError, LectureResultat, Tranche, TransactionsBancairesReadRepository,
+    FiltreTransactions, LectureError, LectureResultat, ReglesCategorisationReadRepository, Tranche,
+    TransactionsBancairesReadRepository,
 };
+use crate::domain::regle_categorisation::{RegleCategorisation, selectionner_regle};
 use crate::domain::transaction_bancaire::{
     CategorisationTransaction, CategorizationSource, NouvelleTransactionBancaire,
     TransactionBancaire, TransactionBancaireId, TransactionStatus,
@@ -17,6 +19,7 @@ use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
     dechiffrer_texte, vers_ecriture_error,
 };
+use crate::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use chrono::{DateTime, NaiveDate, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -25,6 +28,7 @@ const TABLE: &str = "bank_transaction";
 const FIELD_EXTERNAL_TRANSACTION_ID: &str = "external_transaction_id";
 const FIELD_LABEL: &str = "label";
 const FIELD_AMOUNT: &str = "amount_cents";
+const LIMITE_RETROACTIF: i64 = 5000;
 
 fn dedup_key_transaction(
     crypto: &CryptoService,
@@ -211,6 +215,87 @@ impl SqlxBankTransactionsRepository {
         }
     }
 
+    async fn appliquer_regle(
+        &self,
+        proprietaire: &ProprietaireId,
+        transaction: &TransactionBancaireId,
+        regle: &RegleCategorisation,
+    ) -> Result<(), ChiffrementError> {
+        sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET category_id = $1, categorization_source = $2, rule_id = $3 \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id \
+             AND t.id = $4 AND a.owner_id = $5 \
+             AND t.categorization_source <> $6",
+        )
+        .bind(regle.category_id.0)
+        .bind(CategorizationSource::Rule.as_str())
+        .bind(regle.id.0)
+        .bind(transaction.0)
+        .bind(&proprietaire.0)
+        .bind(CategorizationSource::Manual.as_str())
+        .execute(&self.db)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn lister_non_categorisees_pour_proprietaire(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<(TransactionBancaireId, String)>, ChiffrementError> {
+        let rows: Vec<(Uuid, Vec<u8>)> = sqlx::query_as(
+            "SELECT t.id, t.label \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE a.owner_id = $1 AND t.category_id IS NULL \
+             LIMIT $2",
+        )
+        .bind(&proprietaire.0)
+        .bind(LIMITE_RETROACTIF)
+        .fetch_all(&self.db)
+        .await?;
+
+        if rows.len() as i64 >= LIMITE_RETROACTIF {
+            tracing::warn!(
+                limite = LIMITE_RETROACTIF,
+                "plafond de transactions non catégorisées atteint lors de l'application rétroactive"
+            );
+        }
+
+        rows.into_iter()
+            .map(|(id, label_blob)| {
+                let label =
+                    dechiffrer_texte(crypto, &proprietaire.0, TABLE, FIELD_LABEL, &label_blob)?;
+                Ok((TransactionBancaireId(id), label))
+            })
+            .collect()
+    }
+
+    async fn appliquer_regle_par_lot(
+        &self,
+        regle: &RegleCategorisation,
+        transactions: &[Uuid],
+    ) -> Result<u64, ChiffrementError> {
+        let touchees = sqlx::query(
+            "UPDATE budgy.bank_transaction \
+             SET category_id = $1, categorization_source = $2, rule_id = $3 \
+             WHERE id = ANY($4) AND categorization_source = $5",
+        )
+        .bind(regle.category_id.0)
+        .bind(CategorizationSource::Rule.as_str())
+        .bind(regle.id.0)
+        .bind(transactions)
+        .bind(CategorizationSource::None.as_str())
+        .execute(&self.db)
+        .await?
+        .rows_affected();
+
+        Ok(touchees)
+    }
+
     async fn categorie_accessible(
         &self,
         proprietaire: &ProprietaireId,
@@ -244,13 +329,15 @@ impl SqlxBankTransactionsRepository {
 #[derive(Clone)]
 pub struct SqlxBankTransactionsWriteAdapter {
     repo: SqlxBankTransactionsRepository,
+    regles: SqlxReglesCategorisationRepository,
     crypto: Arc<CryptoService>,
 }
 
 impl SqlxBankTransactionsWriteAdapter {
     pub fn new(db: Db, crypto: Arc<CryptoService>) -> Self {
         Self {
-            repo: SqlxBankTransactionsRepository::new(db),
+            repo: SqlxBankTransactionsRepository::new(db.clone()),
+            regles: SqlxReglesCategorisationRepository::new(db),
             crypto,
         }
     }
@@ -267,6 +354,78 @@ impl SqlxBankTransactionsWriteAdapter {
             .await
             .map_err(vers_ecriture_error)
     }
+
+    pub async fn appliquer_regle_retroactif(
+        &self,
+        regle: &RegleCategorisation,
+    ) -> Result<u64, EcritureError> {
+        let candidats = self
+            .repo
+            .lister_non_categorisees_pour_proprietaire(&self.crypto, &regle.owner_id)
+            .await
+            .map_err(vers_ecriture_error)?;
+
+        let cibles: Vec<Uuid> = candidats
+            .into_iter()
+            .filter(|(_, label)| regle.correspond(label))
+            .map(|(id, _)| id.0)
+            .collect();
+
+        if cibles.is_empty() {
+            return Ok(0);
+        }
+
+        self.repo
+            .appliquer_regle_par_lot(regle, &cibles)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    async fn appliquer_regles_apres_insertion(
+        &self,
+        bank_account: &BankAccountId,
+        transaction: &TransactionBancaireId,
+        label: &str,
+    ) {
+        if let Err(erreur) = self
+            .categoriser_transaction_inseree(bank_account, transaction, label)
+            .await
+        {
+            tracing::warn!(
+                erreur = %erreur,
+                "application automatique des règles ignorée pour la transaction insérée"
+            );
+        }
+    }
+
+    async fn categoriser_transaction_inseree(
+        &self,
+        bank_account: &BankAccountId,
+        transaction: &TransactionBancaireId,
+        label: &str,
+    ) -> Result<(), EcritureError> {
+        let proprietaire = ProprietaireId(
+            self.repo
+                .owner_du_compte(bank_account)
+                .await
+                .map_err(vers_ecriture_error)?,
+        );
+
+        let regles = self
+            .regles
+            .lister_pour_proprietaire(&proprietaire)
+            .await
+            .map_err(|e| EcritureError::Acces(e.to_string()))?;
+
+        if let Some(regle) = selectionner_regle(label, &regles) {
+            self.repo
+                .appliquer_regle(&proprietaire, transaction, regle)
+                .await
+                .map_err(vers_ecriture_error)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
@@ -274,10 +433,21 @@ impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
         &self,
         nouvelle: NouvelleTransactionBancaire,
     ) -> Result<ResultatInsertion<TransactionBancaireId>, EcritureError> {
-        self.repo
+        let bank_account = nouvelle.bank_account.clone();
+        let label = nouvelle.label.clone();
+
+        let resultat = self
+            .repo
             .insert(&self.crypto, nouvelle)
             .await
-            .map_err(vers_ecriture_error)
+            .map_err(vers_ecriture_error)?;
+
+        if let ResultatInsertion::Inseree(ref id) = resultat {
+            self.appliquer_regles_apres_insertion(&bank_account, id, &label)
+                .await;
+        }
+
+        Ok(resultat)
     }
 }
 
