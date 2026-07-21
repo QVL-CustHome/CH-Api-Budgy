@@ -60,3 +60,7 @@ Comptes bancaires chiffrés (IBAN, libellés et montants déchiffrés côté bac
 - `GET /v1/accounts/{account_id}/transactions` — transactions paginées du compte, triées par date décroissante : `{ data: [ { id, label, amount_cents, currency, status, booking_date, value_date } ], total }` ; `404 not_found` si le compte n'appartient pas au `sub`.
 
 Les catégories (S2) et budgets/agrégats (S3) réutiliseront ces mêmes primitives.
+
+## Décisions / Sécurité
+
+- **2026-07-21 (SCRUM-232)** : `budgy.regles_categorisation.label_pattern` est stocké en clair alors que `bank_transaction.label` est chiffré (BYTEA). Risque PII résiduel (un nom de marchand apparaît en clair au niveau accès-DB-au-repos) accepté sciemment pour la simplicité (matching applicatif). À réévaluer lors de l'audit sécurité de fin de sprint (option : chiffrer le pattern via CryptoService, déchiffrement en mémoire au matching).
