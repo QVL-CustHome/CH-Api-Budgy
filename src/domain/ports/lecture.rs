@@ -3,6 +3,7 @@ use crate::domain::bank_account::{BankAccount, BankAccountId, CompteASynchronise
 use crate::domain::category::Category;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
+use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::TransactionBancaire;
 use chrono::{DateTime, Utc};
 use std::future::Future;
@@ -54,6 +55,13 @@ pub trait CategoriesReadRepository: Send + Sync {
         &self,
         proprietaire: &ProprietaireId,
     ) -> impl Future<Output = Result<Vec<CategorieAvecCompteur>, LectureError>> + Send;
+}
+
+pub trait ReglesCategorisationReadRepository: Send + Sync {
+    fn lister_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<RegleCategorisation>, LectureError>> + Send;
 }
 
 pub trait BankAccountsReadRepository: Send + Sync {

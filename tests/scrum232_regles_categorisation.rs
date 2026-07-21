@@ -33,8 +33,8 @@ use uuid::Uuid;
 const SECRET: &str = "secret_de_test_budgy_32_octets_minimum_ok!!";
 const ISSUER: &str = "ch-api-authenticator";
 const AUDIENCE: &str = "ch-api-budgy";
-const ALICE: &str = "qvl-sub-231-alice";
-const BOB: &str = "qvl-sub-231-bob";
+const ALICE: &str = "qvl-sub-232-alice";
+const BOB: &str = "qvl-sub-232-bob";
 const CALLBACK_URL: &str = "https://budgy.custhome.app/banque/callback";
 
 macro_rules! db_or_skip {
@@ -46,7 +46,7 @@ macro_rules! db_or_skip {
             }
             None => {
                 eprintln!(
-                    "SCRUM-231 ignoré : variable {} absente (Postgres jetable requis)",
+                    "SCRUM-232 ignoré : variable {} absente (Postgres jetable requis)",
                     common::ENV_ADMIN_URL
                 );
                 return;
@@ -142,6 +142,59 @@ async fn appel(
     (status, json)
 }
 
+async fn creer_regle(db: &DisposableDb, sub: &str, corps: Value) -> (StatusCode, Value) {
+    appel(db, "POST", "/v1/categorization-rules", sub, Some(corps)).await
+}
+
+async fn categorie_par_defaut(db: &DisposableDb, sub: &str) -> String {
+    let (status, corps) = appel(db, "GET", "/v1/categories", sub, None).await;
+    assert_eq!(status, StatusCode::OK);
+    corps["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["is_default"] == json!(true))
+        .expect("au moins une catégorie par défaut")["id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn creer_categorie(db: &DisposableDb, sub: &str, nom: &str) -> String {
+    let (status, corps) = appel(
+        db,
+        "POST",
+        "/v1/categories",
+        sub,
+        Some(json!({ "name": nom, "kind": "depense" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    corps["id"].as_str().expect("id présent").to_string()
+}
+
+async fn regles_persistees(db: &DisposableDb, owner: &str) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM budgy.regles_categorisation WHERE owner_id = $1",
+    )
+    .bind(owner)
+    .fetch_one(&db.pool)
+    .await
+    .expect("comptage des règles")
+}
+
+async fn regle_par_id(db: &DisposableDb, id: &str) -> Option<(String, String, i32)> {
+    let uuid = Uuid::parse_str(id).expect("id de règle valide");
+    sqlx::query_as::<_, (String, Uuid, i32)>(
+        "SELECT label_pattern, category_id, priority FROM budgy.regles_categorisation WHERE id = $1",
+    )
+    .bind(uuid)
+    .fetch_optional(&db.pool)
+    .await
+    .expect("lecture de la règle")
+    .map(|(pattern, category, priority)| (pattern, category.to_string(), priority))
+}
+
 async fn semer_compte(db: &DisposableDb, sub: &str) -> BankAccountId {
     let proprietaire = ProprietaireId(sub.to_string());
     let crypto = crypto();
@@ -187,7 +240,7 @@ async fn semer_transaction(db: &DisposableDb, compte: &BankAccountId) -> Uuid {
             bank_account: compte.clone(),
             external_transaction_id: format!("tx-{}", Uuid::new_v4()),
             status: TransactionStatus::Booked,
-            label: "ACHAT".to_string(),
+            label: "MONOPRIX PARIS".to_string(),
             amount_cents: -4_590,
             currency: "EUR".to_string(),
             booking_date: None,
@@ -202,63 +255,7 @@ async fn semer_transaction(db: &DisposableDb, compte: &BankAccountId) -> Uuid {
     }
 }
 
-async fn categorie_par_defaut(db: &DisposableDb, sub: &str) -> String {
-    let (status, corps) = appel(db, "GET", "/v1/categories", sub, None).await;
-    assert_eq!(status, StatusCode::OK);
-    corps["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["is_default"] == json!(true))
-        .expect("au moins une catégorie par défaut")["id"]
-        .as_str()
-        .unwrap()
-        .to_string()
-}
-
-async fn deux_categories_par_defaut(db: &DisposableDb, sub: &str) -> (String, String) {
-    let (status, corps) = appel(db, "GET", "/v1/categories", sub, None).await;
-    assert_eq!(status, StatusCode::OK);
-    let defauts: Vec<String> = corps["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|c| c["is_default"] == json!(true))
-        .map(|c| c["id"].as_str().unwrap().to_string())
-        .collect();
-    assert!(defauts.len() >= 2, "deux catégories par défaut requises");
-    (defauts[0].clone(), defauts[1].clone())
-}
-
-async fn creer_categorie(db: &DisposableDb, sub: &str, nom: &str) -> String {
-    let (status, corps) = appel(
-        db,
-        "POST",
-        "/v1/categories",
-        sub,
-        Some(json!({ "name": nom, "kind": "depense" })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED);
-    corps["id"].as_str().expect("id présent").to_string()
-}
-
-fn uri_categoriser(compte: &BankAccountId, transaction: Uuid) -> String {
-    format!(
-        "/v1/accounts/{}/transactions/{transaction}/category",
-        compte.0
-    )
-}
-
-fn uri_non_categorisees(compte: &BankAccountId) -> String {
-    format!("/v1/accounts/{}/transactions?uncategorized=true", compte.0)
-}
-
-fn uri_transactions(compte: &BankAccountId) -> String {
-    format!("/v1/accounts/{}/transactions", compte.0)
-}
-
-async fn categoriser(
+async fn categoriser_manuellement(
     db: &DisposableDb,
     sub: &str,
     compte: &BankAccountId,
@@ -268,171 +265,214 @@ async fn categoriser(
     appel(
         db,
         "PUT",
-        &uri_categoriser(compte, transaction),
+        &format!(
+            "/v1/accounts/{}/transactions/{transaction}/category",
+            compte.0
+        ),
         sub,
         Some(json!({ "category_id": categorie })),
     )
     .await
 }
 
-fn ids_de(corps: &Value) -> Vec<String> {
-    corps["data"]
-        .as_array()
-        .expect("data est un tableau")
-        .iter()
-        .map(|t| t["id"].as_str().expect("id de transaction").to_string())
-        .collect()
-}
-
 #[tokio::test]
-async fn ca01_attribution_associe_la_categorie_en_source_manuelle() {
+async fn ca02_acceptation_cree_une_regle_active_persistee() {
     let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let transaction = semer_transaction(&db, &compte).await;
     let categorie = categorie_par_defaut(&db, ALICE).await;
 
-    let (status, corps) = categoriser(&db, ALICE, &compte, transaction, &categorie).await;
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "MONOPRIX", "category_id": categorie }),
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::CREATED);
+    assert!(corps["id"].is_string());
+    assert_eq!(corps["label_pattern"], json!("MONOPRIX"));
     assert_eq!(corps["category_id"], json!(categorie));
-    assert_eq!(corps["categorization_source"], json!("manual"));
+    assert_eq!(corps["priority"], json!(0));
+    assert!(corps["created_at"].is_string());
+
+    let id = corps["id"].as_str().unwrap();
+    let persistee = regle_par_id(&db, id)
+        .await
+        .expect("règle persistée en base");
+    assert_eq!(persistee.0, "MONOPRIX");
+    assert_eq!(persistee.1, categorie);
+    assert_eq!(persistee.2, 0);
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn ca01_attribution_retire_la_transaction_des_non_categorisees() {
+async fn ca02_priority_fournie_est_conservee() {
     let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let transaction = semer_transaction(&db, &compte).await;
     let categorie = categorie_par_defaut(&db, ALICE).await;
 
-    let (_, avant) = appel(&db, "GET", &uri_non_categorisees(&compte), ALICE, None).await;
-    assert!(
-        ids_de(&avant).contains(&transaction.to_string()),
-        "la transaction non catégorisée doit d'abord apparaître dans le filtre"
-    );
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "SNCF", "category_id": categorie, "priority": 7 }),
+    )
+    .await;
 
-    let (status, _) = categoriser(&db, ALICE, &compte, transaction, &categorie).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(corps["priority"], json!(7));
 
-    let (_, apres) = appel(&db, "GET", &uri_non_categorisees(&compte), ALICE, None).await;
-    assert!(
-        !ids_de(&apres).contains(&transaction.to_string()),
-        "la transaction catégorisée ne doit plus apparaître dans les non catégorisées"
-    );
+    let id = corps["id"].as_str().unwrap();
+    assert_eq!(regle_par_id(&db, id).await.unwrap().2, 7);
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn ca02_modification_remplace_l_ancienne_categorie() {
+async fn ca02_categorie_par_defaut_est_autorisee() {
     let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let transaction = semer_transaction(&db, &compte).await;
-    let (ancienne, nouvelle) = deux_categories_par_defaut(&db, ALICE).await;
-
-    let (status_initial, corps_initial) =
-        categoriser(&db, ALICE, &compte, transaction, &ancienne).await;
-    assert_eq!(status_initial, StatusCode::OK);
-    assert_eq!(corps_initial["category_id"], json!(ancienne));
-
-    let (status, corps) = categoriser(&db, ALICE, &compte, transaction, &nouvelle).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(corps["category_id"], json!(nouvelle));
-    assert_ne!(corps["category_id"], json!(ancienne));
-    assert_eq!(corps["categorization_source"], json!("manual"));
-
-    db.destroy().await;
-}
-
-#[tokio::test]
-async fn ca03_filtre_ne_renvoie_que_les_transactions_sans_categorie() {
-    let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let sans_categorie_a = semer_transaction(&db, &compte).await;
-    let sans_categorie_b = semer_transaction(&db, &compte).await;
-    let categorisee = semer_transaction(&db, &compte).await;
     let categorie = categorie_par_defaut(&db, ALICE).await;
 
-    let (status_cat, _) = categoriser(&db, ALICE, &compte, categorisee, &categorie).await;
-    assert_eq!(status_cat, StatusCode::OK);
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "EDF", "category_id": categorie }),
+    )
+    .await;
 
-    let (status, corps) = appel(&db, "GET", &uri_non_categorisees(&compte), ALICE, None).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let ids = ids_de(&corps);
-    assert_eq!(corps["total"], json!(2));
-    assert!(ids.contains(&sans_categorie_a.to_string()));
-    assert!(ids.contains(&sans_categorie_b.to_string()));
-    assert!(!ids.contains(&categorisee.to_string()));
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(corps["category_id"], json!(categorie));
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn ca03_sans_filtre_toutes_les_transactions_sont_visibles() {
+async fn ca02_categorie_creee_par_l_owner_est_autorisee() {
     let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let sans_categorie = semer_transaction(&db, &compte).await;
-    let categorisee = semer_transaction(&db, &compte).await;
-    let categorie = categorie_par_defaut(&db, ALICE).await;
-    let (status_cat, _) = categoriser(&db, ALICE, &compte, categorisee, &categorie).await;
-    assert_eq!(status_cat, StatusCode::OK);
+    let categorie = creer_categorie(&db, ALICE, "Abonnements").await;
 
-    let (status, corps) = appel(&db, "GET", &uri_transactions(&compte), ALICE, None).await;
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "NETFLIX", "category_id": categorie }),
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::OK);
-    let ids = ids_de(&corps);
-    assert_eq!(corps["total"], json!(2));
-    assert!(ids.contains(&sans_categorie.to_string()));
-    assert!(ids.contains(&categorisee.to_string()));
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(corps["category_id"], json!(categorie));
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn idor_categoriser_la_transaction_d_un_autre_owner_renvoie_404() {
+async fn ca02_limite_pattern_de_140_caracteres_est_accepte() {
     let db = db_or_skip!();
-    let compte_bob = semer_compte(&db, BOB).await;
-    let transaction_bob = semer_transaction(&db, &compte_bob).await;
+    let categorie = categorie_par_defaut(&db, ALICE).await;
+    let pattern = "A".repeat(140);
+
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": pattern, "category_id": categorie }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(corps["label_pattern"], json!(pattern));
+
+    db.destroy().await;
+}
+
+#[tokio::test]
+async fn validation_pattern_vide_renvoie_400_sans_creation() {
+    let db = db_or_skip!();
     let categorie = categorie_par_defaut(&db, ALICE).await;
 
-    let (status, corps) = categoriser(&db, ALICE, &compte_bob, transaction_bob, &categorie).await;
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "", "category_id": categorie }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(corps["code"], json!("bad_request"));
+    assert_eq!(regles_persistees(&db, ALICE).await, 0);
+
+    db.destroy().await;
+}
+
+#[tokio::test]
+async fn validation_pattern_de_141_caracteres_renvoie_400_sans_creation() {
+    let db = db_or_skip!();
+    let categorie = categorie_par_defaut(&db, ALICE).await;
+    let pattern = "A".repeat(141);
+
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": pattern, "category_id": categorie }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(corps["code"], json!("bad_request"));
+    assert_eq!(regles_persistees(&db, ALICE).await, 0);
+
+    db.destroy().await;
+}
+
+#[tokio::test]
+async fn idor_categorie_inexistante_renvoie_404_sans_creation() {
+    let db = db_or_skip!();
+    let inexistante = Uuid::new_v4().to_string();
+
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "FANTOME", "category_id": inexistante }),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(corps["code"], json!("not_found"));
+    assert_eq!(regles_persistees(&db, ALICE).await, 0);
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn idor_categoriser_avec_la_categorie_d_un_autre_owner_renvoie_404() {
+async fn idor_categorie_d_un_autre_owner_renvoie_404_jamais_403() {
     let db = db_or_skip!();
-    let compte = semer_compte(&db, ALICE).await;
-    let transaction = semer_transaction(&db, &compte).await;
     let categorie_bob = creer_categorie(&db, BOB, "Privé Bob").await;
 
-    let (status, corps) = categoriser(&db, ALICE, &compte, transaction, &categorie_bob).await;
+    let (status, corps) = creer_regle(
+        &db,
+        ALICE,
+        json!({ "label_pattern": "DETOURNEMENT", "category_id": categorie_bob }),
+    )
+    .await;
 
+    assert_ne!(status, StatusCode::FORBIDDEN);
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(corps["code"], json!("not_found"));
+    assert_eq!(regles_persistees(&db, ALICE).await, 0);
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn categoriser_avec_une_categorie_par_defaut_est_autorise() {
+async fn ca03_categorisation_manuelle_seule_ne_cree_aucune_regle() {
     let db = db_or_skip!();
     let compte = semer_compte(&db, ALICE).await;
     let transaction = semer_transaction(&db, &compte).await;
     let categorie = categorie_par_defaut(&db, ALICE).await;
 
-    let (status, corps) = categoriser(&db, ALICE, &compte, transaction, &categorie).await;
+    let (status, corps) =
+        categoriser_manuellement(&db, ALICE, &compte, transaction, &categorie).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(corps["category_id"], json!(categorie));
+    assert_eq!(corps["categorization_source"], json!("manual"));
+    assert_eq!(regles_persistees(&db, ALICE).await, 0);
 
     db.destroy().await;
 }
