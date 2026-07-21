@@ -61,6 +61,26 @@ Comptes bancaires chiffrés (IBAN, libellés et montants déchiffrés côté bac
 
 Les catégories (S2) et budgets/agrégats (S3) réutiliseront ces mêmes primitives.
 
+## Moteur de catégorisation par règles (SCRUM-231/232/233)
+
+Une règle appartient à un propriétaire et associe un `label_pattern` à une `category_id` avec une `priority`. Le matcher est une **sous-chaîne insensible à la casse** (`RegleCategorisation::correspond`). Comme les libellés de transaction sont chiffrés en base, le matching se fait **en applicatif après déchiffrement** ; aucun matching SQL n'est possible.
+
+Le classement des règles candidates est porté par le domaine (`selectionner_regle`), totalement déterministe : `priority` DESC, puis `created_at` DESC, puis `id`. Il ne dépend pas de l'ordre de retour SQL.
+
+Deux volets d'application :
+
+- **Nouvelles transactions** : à chaque insertion effective, la règle du propriétaire la mieux classée est appliquée. Une catégorisation manuelle n'est jamais réécrite (`categorization_source <> 'manual'`). L'échec de cette étape est non-bloquant (loggé en `warn`, l'insertion reste acquise).
+- **Rétroactif** : à la création d'une règle, les transactions non catégorisées du propriétaire (`categorization_source = 'none'`) sont recatégorisées par lot. Non-bloquant : la création répond `201` même si le batch échoue. Plafond de `5000` transactions par lot (au-delà, un `warn` est émis).
+
+## Tests d'intégration
+
+Les tests d'intégration nécessitent un PostgreSQL accessible via la variable `BUDGY_TEST_DATABASE_URL`, avec un rôle disposant du privilège `CREATEDB` : le harness (`tests/common/mod.rs`) crée une base jetable par exécution, y applique les migrations `0001` → `0012`, puis la détruit.
+
+Sans cette variable, ou si la base est indisponible / le privilège `CREATEDB` manquant, les tests d'intégration **se skippent proprement** (message sur `stderr`, aucun panic).
+
 ## Décisions / Sécurité
 
-- **2026-07-21 (SCRUM-232)** : `budgy.regles_categorisation.label_pattern` est stocké en clair alors que `bank_transaction.label` est chiffré (BYTEA). Risque PII résiduel (un nom de marchand apparaît en clair au niveau accès-DB-au-repos) accepté sciemment pour la simplicité (matching applicatif). À réévaluer lors de l'audit sécurité de fin de sprint (option : chiffrer le pattern via CryptoService, déchiffrement en mémoire au matching).
+- **2026-07-21 (SCRUM-233)** : moteur d'application des règles livré (nouvelles transactions + rétroactif à la création de règle). Le matching est **applicatif après déchiffrement** des libellés : les `label` sont chiffrés en base, un matching SQL est donc impossible.
+- **2026-07-21 (clôture S2)** : le classement des règles est porté par le domaine (`selectionner_regle`), indépendant de l'ordre de retour SQL. Les valeurs de `categorization_source` (`manual` / `rule` / `none`) ont une source unique : l'enum `CategorizationSource`.
+- **2026-07-21 (SEC-001, dette assumée)** : `budgy.regles_categorisation.label_pattern` reste stocké **en clair** alors que `bank_transaction.label` est chiffré (BYTEA). Décision cohérente avec SCRUM-232. L'audit sécu de clôture l'a classé **Medium** (PII potentielle, incohérent avec le chiffrement des labels de transaction). Chiffrement **reporté** à un sprint ultérieur ; hacher est exclu car casserait le matching par sous-chaîne. À réévaluer.
+- **2026-07-21 (dette archi, à trancher)** : pattern trait-port + adapter concret généralisé mais non consommé en `dyn` (observation d'audit, hors périmètre US). Décision de convention à trancher avec le lead.
