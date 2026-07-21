@@ -7,6 +7,7 @@ use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
+use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::{Claims, JwtService, JwtValidationError};
 use ch_api_budgy::state::AppState;
@@ -225,6 +226,7 @@ fn test_state() -> AppState {
     AppState {
         consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
         categories: Arc::new(SqlxCategoriesRepository::new(db.clone())),
+        regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.clone(),
             crypto.clone(),

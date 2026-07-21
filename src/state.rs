@@ -7,6 +7,7 @@ use crate::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use crate::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use crate::repository::categories::SqlxCategoriesRepository;
 use crate::repository::consents::SqlxConsentsWriteAdapter;
+use crate::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use crate::services::jwt::JwtService;
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ pub struct AppState {
     pub jwt: Arc<JwtService>,
     pub consents: Arc<SqlxConsentsWriteAdapter>,
     pub categories: Arc<SqlxCategoriesRepository>,
+    pub regles_categorisation: Arc<SqlxReglesCategorisationRepository>,
     pub bank_accounts: Arc<SqlxBankAccountsWriteAdapter>,
     pub bank_transactions: Arc<SqlxBankTransactionsWriteAdapter>,
     pub bank_source: Arc<dyn BankDataSource>,
@@ -32,6 +34,7 @@ impl AppState {
         Self {
             consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
             categories: Arc::new(SqlxCategoriesRepository::new(db.clone())),
+            regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.clone())),
             bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
                 db.clone(),
                 crypto.clone(),
