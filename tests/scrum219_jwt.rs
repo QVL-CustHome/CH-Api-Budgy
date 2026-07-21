@@ -5,6 +5,7 @@ use ch_api_budgy::config::{self, ConfigError, EnableBankingConfig};
 use ch_api_budgy::crypto::CryptoService;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
+use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::{Claims, JwtService, JwtValidationError};
@@ -223,6 +224,7 @@ fn test_state() -> AppState {
     let crypto = Arc::new(CryptoService::from_key(&[7u8; 32]).unwrap());
     AppState {
         consents: Arc::new(SqlxConsentsWriteAdapter::new(db.clone(), crypto.clone())),
+        categories: Arc::new(SqlxCategoriesRepository::new(db.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.clone(),
             crypto.clone(),

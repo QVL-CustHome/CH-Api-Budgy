@@ -17,6 +17,7 @@ use ch_api_budgy::domain::transaction_bancaire::{NouvelleTransactionBancaire, Tr
 use ch_api_budgy::repository::balances::SqlxBalancesWriteAdapter;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
+use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;
@@ -72,6 +73,7 @@ fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
             db.pool.clone(),
             crypto.clone(),
         )),
+        categories: Arc::new(SqlxCategoriesRepository::new(db.pool.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
             crypto.clone(),
