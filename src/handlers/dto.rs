@@ -1,6 +1,7 @@
 use crate::api::money::Centimes;
 use crate::domain::balance::{Balance, BalanceType};
 use crate::domain::bank_account::BankAccount;
+use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::CompteAvecSolde;
@@ -24,6 +25,57 @@ impl From<Etablissement> for BankDto {
             pays: etablissement.pays,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CategoryKindDto {
+    Revenu,
+    Depense,
+}
+
+impl From<CategoryKind> for CategoryKindDto {
+    fn from(kind: CategoryKind) -> Self {
+        match kind {
+            CategoryKind::Revenu => CategoryKindDto::Revenu,
+            CategoryKind::Depense => CategoryKindDto::Depense,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategoryDto {
+    pub id: Uuid,
+    pub name: String,
+    pub kind: CategoryKindDto,
+    pub color: String,
+    pub icon: String,
+    pub is_default: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<Category> for CategoryDto {
+    fn from(category: Category) -> Self {
+        Self {
+            id: category.id.0,
+            is_default: category.est_par_defaut(),
+            name: category.name,
+            kind: category.kind.into(),
+            color: category.color,
+            icon: category.icon,
+            created_at: category.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CategoryRequest {
+    pub name: String,
+    pub kind: String,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
