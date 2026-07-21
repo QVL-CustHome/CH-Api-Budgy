@@ -30,5 +30,8 @@ pub async fn create_rule(
         .await?
         .ok_or_else(|| ApiError::not_found("catégorie introuvable"))?;
 
-    Ok((StatusCode::CREATED, Json(CategorizationRuleDto::from(regle))))
+    Ok((
+        StatusCode::CREATED,
+        Json(CategorizationRuleDto::from(regle)),
+    ))
 }
