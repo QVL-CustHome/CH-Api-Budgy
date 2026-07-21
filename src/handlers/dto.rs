@@ -5,7 +5,9 @@ use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
-use crate::domain::transaction_bancaire::{TransactionBancaire, TransactionStatus};
+use crate::domain::transaction_bancaire::{
+    CategorizationSource, TransactionBancaire, TransactionStatus,
+};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -272,6 +274,24 @@ impl From<TransactionStatus> for TransactionStatusDto {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CategorizationSourceDto {
+    Manual,
+    Rule,
+    None,
+}
+
+impl From<CategorizationSource> for CategorizationSourceDto {
+    fn from(source: CategorizationSource) -> Self {
+        match source {
+            CategorizationSource::Manual => CategorizationSourceDto::Manual,
+            CategorizationSource::Rule => CategorizationSourceDto::Rule,
+            CategorizationSource::None => CategorizationSourceDto::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BankTransactionDto {
     pub id: Uuid,
@@ -281,6 +301,8 @@ pub struct BankTransactionDto {
     pub status: TransactionStatusDto,
     pub booking_date: Option<NaiveDate>,
     pub value_date: Option<NaiveDate>,
+    pub category_id: Option<Uuid>,
+    pub categorization_source: CategorizationSourceDto,
 }
 
 impl From<TransactionBancaire> for BankTransactionDto {
@@ -293,6 +315,13 @@ impl From<TransactionBancaire> for BankTransactionDto {
             status: transaction.status.into(),
             booking_date: transaction.booking_date,
             value_date: transaction.value_date,
+            category_id: transaction.category.map(|c| c.0),
+            categorization_source: transaction.categorization_source.into(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CategorizeTransactionRequest {
+    pub category_id: Uuid,
 }

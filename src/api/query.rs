@@ -28,6 +28,7 @@ pub struct ListQuery {
     pub from: Option<NaiveDate>,
     pub to: Option<NaiveDate>,
     pub account_id: Option<Uuid>,
+    pub uncategorized: Option<bool>,
 }
 
 impl ListQuery {

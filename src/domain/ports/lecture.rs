@@ -90,11 +90,17 @@ pub trait ComptesBancairesReadRepository: Send + Sync {
     ) -> impl Future<Output = Result<bool, LectureError>> + Send;
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FiltreTransactions {
+    pub non_categorisees: bool,
+}
+
 pub trait TransactionsBancairesReadRepository: Send + Sync {
     fn lister_par_compte(
         &self,
         proprietaire: &ProprietaireId,
         compte: &BankAccountId,
+        filtre: FiltreTransactions,
         tranche: Tranche,
     ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
 }
