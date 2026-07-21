@@ -7,7 +7,7 @@ use crate::domain::bank_account::{BankAccount, BankAccountId, masquer_iban};
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::ports::bank_data_source::{BankDataSourceError, Etablissement};
 use crate::domain::transaction_bancaire::{
-    TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, TransactionBancaire, TransactionBancaireId, TransactionStatus,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 
@@ -176,6 +176,9 @@ pub fn vers_transaction(
         currency: transaction.transaction_amount.currency.clone(),
         booking_date: parser_date(&transaction.booking_date),
         value_date: parser_date(&transaction.value_date),
+        category: None,
+        categorization_source: CategorizationSource::None,
+        rule_id: None,
         created_at: horodatage,
     })
 }
