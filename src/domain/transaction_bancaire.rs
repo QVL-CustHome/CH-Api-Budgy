@@ -77,6 +77,13 @@ pub struct TransactionBancaire {
 }
 
 #[derive(Debug, Clone)]
+pub enum CategorisationTransaction {
+    Categorisee(TransactionBancaire),
+    TransactionIntrouvable,
+    CategorieIntrouvable,
+}
+
+#[derive(Debug, Clone)]
 pub struct NouvelleTransactionBancaire {
     pub bank_account: BankAccountId,
     pub external_transaction_id: String,
