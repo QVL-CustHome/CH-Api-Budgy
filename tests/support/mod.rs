@@ -17,7 +17,8 @@ use ch_api_budgy::domain::ports::ecriture::{
     EcritureError, ResultatInsertion,
 };
 use ch_api_budgy::domain::transaction_bancaire::{
-    NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
+    TransactionStatus,
 };
 use chrono::{NaiveDate, TimeZone, Utc};
 use rsa::RsaPrivateKey;
@@ -139,6 +140,9 @@ impl BankDataSource for SourceBancaireFake {
             currency: "EUR".to_string(),
             booking_date: None,
             value_date: None,
+            category: None,
+            categorization_source: CategorizationSource::None,
+            rule_id: None,
             created_at: Utc.with_ymd_and_hms(2026, 6, 27, 0, 0, 0).unwrap(),
         }])
     }

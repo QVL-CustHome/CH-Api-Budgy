@@ -22,7 +22,8 @@ use ch_api_budgy::domain::ports::lecture::{
 };
 use ch_api_budgy::domain::synchro::{DependancesSynchro, ParametresSynchro, SynchroComptes};
 use ch_api_budgy::domain::transaction_bancaire::{
-    NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
+    TransactionStatus,
 };
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
@@ -363,6 +364,9 @@ fn transaction(
         currency: "EUR".to_string(),
         booking_date: None,
         value_date: None,
+        category: None,
+        categorization_source: CategorizationSource::None,
+        rule_id: None,
         created_at: Utc.with_ymd_and_hms(2026, 6, 25, 8, 0, 0).unwrap(),
     }
 }
