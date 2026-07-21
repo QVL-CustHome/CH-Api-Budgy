@@ -18,19 +18,38 @@ impl DisposableDb {
         let admin_url = std::env::var(ENV_ADMIN_URL).ok()?;
         let db_name = format!("budgy_it_{}", Uuid::new_v4().simple());
 
-        let mut admin = PgConnection::connect(&admin_url)
-            .await
-            .expect("connexion à la base d'administration impossible");
-        admin
+        let mut admin = match PgConnection::connect(&admin_url).await {
+            Ok(admin) => admin,
+            Err(erreur) => {
+                eprintln!(
+                    "{ENV_ADMIN_URL} défini mais connexion à la base d'administration impossible ({erreur}) : tests d'intégration ignorés"
+                );
+                return None;
+            }
+        };
+
+        if let Err(erreur) = admin
             .execute(format!("CREATE DATABASE \"{db_name}\"").as_str())
             .await
-            .expect("création de la base jetable impossible");
+        {
+            eprintln!(
+                "création de la base jetable refusée ({erreur}) : le rôle doit disposer du privilège CREATEDB, tests d'intégration ignorés"
+            );
+            admin.close().await.ok();
+            return None;
+        }
         admin.close().await.ok();
 
         let db_url = replace_database(&admin_url, &db_name);
-        let pool = db::connect(&db_url)
-            .await
-            .expect("connexion à la base jetable impossible");
+        let pool = match db::connect(&db_url).await {
+            Ok(pool) => pool,
+            Err(erreur) => {
+                eprintln!(
+                    "connexion à la base jetable impossible ({erreur}) : tests d'intégration ignorés"
+                );
+                return None;
+            }
+        };
 
         Some(Self {
             admin_url,

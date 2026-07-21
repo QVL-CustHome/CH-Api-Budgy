@@ -58,7 +58,10 @@ pub fn selectionner_regle<'a>(
     label: &str,
     regles: &'a [RegleCategorisation],
 ) -> Option<&'a RegleCategorisation> {
-    regles.iter().find(|regle| regle.correspond(label))
+    regles
+        .iter()
+        .filter(|regle| regle.correspond(label))
+        .max_by_key(|regle| (regle.priority, regle.created_at, regle.id.0))
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +133,27 @@ mod tests {
         let regles = vec![
             regle("carrefour", 5, instant(2)),
             regle("carrefour market", 5, instant(1)),
+        ];
+        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
+        assert_eq!(choisie.label_pattern, "carrefour");
+    }
+
+    #[test]
+    fn selectionner_choisit_la_priorite_max_meme_en_derniere_position_du_slice() {
+        let regles = vec![
+            regle("carrefour", 1, instant(0)),
+            regle("market", 3, instant(0)),
+            regle("achat", 10, instant(0)),
+        ];
+        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
+        assert_eq!(choisie.label_pattern, "achat");
+    }
+
+    #[test]
+    fn selectionner_prend_la_plus_recente_a_priorite_egale_quel_que_soit_l_ordre() {
+        let regles = vec![
+            regle("achat", 5, instant(1)),
+            regle("carrefour", 5, instant(10)),
         ];
         let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
         assert_eq!(choisie.label_pattern, "carrefour");

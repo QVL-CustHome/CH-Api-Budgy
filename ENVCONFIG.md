@@ -45,6 +45,12 @@ Deux familles de variables :
 |----------|:-----------:|:--------:|--------|--------|-------------|
 | `INTERNAL_API_SECRET` | a venir | **oui** | -- | >= 32 octets UTF-8 | Secret d'authentification inter-services partage avec CH-Api-Authenticator / CH-Api-Drive (header `x-internal-secret`, comparaison temps constant). **A documenter / cabler en US-04** si Budgy doit dialoguer avec les services internes. Meme valeur que les autres services, distinct de tout secret JWT. Non lu par le code a ce jour -- aucune valeur a inventer. |
 
+### Variable des tests d'integration (hors runtime)
+
+| Variable | Obligatoire | Sensible | Defaut | Format | Description |
+|----------|:-----------:|:--------:|--------|--------|-------------|
+| `BUDGY_TEST_DATABASE_URL` | non (tests) | oui | -- | URI PostgreSQL d'administration | Base d'administration pour les tests d'integration. Le role doit avoir le privilege `CREATEDB` : le harness cree une base jetable par execution, applique les migrations `0001` -> `0012`, puis la detruit. Absente ou base indisponible -> les tests d'integration **se skippent proprement** (pas de panic). Non lue par le runtime. |
+
 ---
 
 ## Comportement fail-fast au demarrage (par secret)

@@ -280,14 +280,18 @@ impl SqlxBankTransactionsRepository {
         transactions: &[Uuid],
     ) -> Result<u64, ChiffrementError> {
         let touchees = sqlx::query(
-            "UPDATE budgy.bank_transaction \
+            "UPDATE budgy.bank_transaction AS t \
              SET category_id = $1, categorization_source = $2, rule_id = $3 \
-             WHERE id = ANY($4) AND categorization_source = $5",
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id \
+             AND t.id = ANY($4) AND a.owner_id = $5 \
+             AND t.categorization_source = $6",
         )
         .bind(regle.category_id.0)
         .bind(CategorizationSource::Rule.as_str())
         .bind(regle.id.0)
         .bind(transactions)
+        .bind(&regle.owner_id.0)
         .bind(CategorizationSource::None.as_str())
         .execute(&self.db)
         .await?
