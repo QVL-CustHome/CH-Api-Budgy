@@ -44,7 +44,10 @@ pub trait ConsentsReadRepository: Send + Sync {
 }
 
 pub trait CategoriesReadRepository: Send + Sync {
-    fn lister(&self) -> impl Future<Output = Result<Vec<Category>, LectureError>> + Send;
+    fn lister_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<Category>, LectureError>> + Send;
 }
 
 pub trait BankAccountsReadRepository: Send + Sync {
