@@ -4,7 +4,9 @@ use crate::domain::category::{
 };
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::{CategoriesWriteRepository, EcritureError};
-use crate::domain::ports::lecture::{CategoriesReadRepository, LectureError};
+use crate::domain::ports::lecture::{
+    CategorieAvecCompteur, CategoriesReadRepository, LectureError,
+};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -23,19 +25,20 @@ impl CategoriesReadRepository for SqlxCategoriesRepository {
     async fn lister_pour_proprietaire(
         &self,
         proprietaire: &ProprietaireId,
-    ) -> Result<Vec<Category>, LectureError> {
-        let rows = sqlx::query_as::<_, CategoryRow>(
-            "SELECT id, owner_id, name, kind, color, icon, created_at \
-             FROM budgy.category \
-             WHERE owner_id IS NULL OR owner_id = $1 \
-             ORDER BY kind, name",
+    ) -> Result<Vec<CategorieAvecCompteur>, LectureError> {
+        let rows = sqlx::query_as::<_, CategoryWithCountRow>(
+            "SELECT c.id, c.owner_id, c.name, c.kind, c.color, c.icon, c.created_at, \
+             (SELECT COUNT(*) FROM budgy.bank_transaction t WHERE t.category_id = c.id) AS transaction_count \
+             FROM budgy.category c \
+             WHERE c.owner_id IS NULL OR c.owner_id = $1 \
+             ORDER BY c.kind, c.name",
         )
         .bind(&proprietaire.0)
         .fetch_all(&self.db)
         .await
         .map_err(|e| LectureError::Acces(e.to_string()))?;
 
-        rows.into_iter().map(into_category).collect()
+        rows.into_iter().map(into_categorie_avec_compteur).collect()
     }
 }
 
@@ -109,6 +112,28 @@ type CategoryRow = (
     String,
     DateTime<Utc>,
 );
+
+type CategoryWithCountRow = (
+    Uuid,
+    Option<String>,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    i64,
+);
+
+fn into_categorie_avec_compteur(
+    row: CategoryWithCountRow,
+) -> Result<CategorieAvecCompteur, LectureError> {
+    let (id, owner_id, name, kind, color, icon, created_at, transaction_count) = row;
+    let category = into_category((id, owner_id, name, kind, color, icon, created_at))?;
+    Ok(CategorieAvecCompteur {
+        category,
+        transaction_count,
+    })
+}
 
 fn into_category(row: CategoryRow) -> Result<Category, LectureError> {
     let (id, owner_id, name, kind, color, icon, created_at) = row;

@@ -1,6 +1,7 @@
 mod common;
 
 use ch_api_budgy::domain::category::{Category, CategoryKind};
+use ch_api_budgy::domain::compte::ProprietaireId;
 use ch_api_budgy::domain::ports::lecture::CategoriesReadRepository;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use common::DisposableDb;
@@ -21,10 +22,14 @@ macro_rules! db_or_skip {
 }
 
 async fn lister(db: &DisposableDb) -> Vec<Category> {
+    let proprietaire = ProprietaireId("seed-check".to_string());
     SqlxCategoriesRepository::new(db.pool.clone())
-        .lister()
+        .lister_pour_proprietaire(&proprietaire)
         .await
         .expect("liste des catégories")
+        .into_iter()
+        .map(|categorie| categorie.category)
+        .collect()
 }
 
 fn kind_de(categories: &[Category], nom: &str) -> CategoryKind {

@@ -4,7 +4,7 @@ use crate::domain::bank_account::BankAccount;
 use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
-use crate::domain::ports::lecture::CompteAvecSolde;
+use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
 use crate::domain::transaction_bancaire::{TransactionBancaire, TransactionStatus};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,11 +51,12 @@ pub struct CategoryDto {
     pub color: String,
     pub icon: String,
     pub is_default: bool,
+    pub transaction_count: i64,
     pub created_at: DateTime<Utc>,
 }
 
-impl From<Category> for CategoryDto {
-    fn from(category: Category) -> Self {
+impl CategoryDto {
+    pub fn avec_compteur(category: Category, transaction_count: i64) -> Self {
         Self {
             id: category.id.0,
             is_default: category.est_par_defaut(),
@@ -63,8 +64,15 @@ impl From<Category> for CategoryDto {
             kind: category.kind.into(),
             color: category.color,
             icon: category.icon,
+            transaction_count,
             created_at: category.created_at,
         }
+    }
+}
+
+impl From<CategorieAvecCompteur> for CategoryDto {
+    fn from(item: CategorieAvecCompteur) -> Self {
+        Self::avec_compteur(item.category, item.transaction_count)
     }
 }
 

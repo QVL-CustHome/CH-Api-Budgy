@@ -50,7 +50,10 @@ pub async fn create_category(
         })
         .await?;
 
-    Ok((StatusCode::CREATED, Json(CategoryDto::from(categorie))))
+    Ok((
+        StatusCode::CREATED,
+        Json(CategoryDto::avec_compteur(categorie, 0)),
+    ))
 }
 
 pub async fn update_category(
@@ -78,7 +81,7 @@ pub async fn update_category(
         .await?
         .ok_or_else(|| ApiError::not_found("catégorie introuvable"))?;
 
-    Ok(Json(CategoryDto::from(categorie)))
+    Ok(Json(CategoryDto::avec_compteur(categorie, 0)))
 }
 
 pub async fn delete_category(
