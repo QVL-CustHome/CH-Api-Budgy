@@ -1,6 +1,7 @@
 use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
@@ -9,7 +10,8 @@ use crate::domain::ports::lecture::{
     LectureError, LectureResultat, Tranche, TransactionsBancairesReadRepository,
 };
 use crate::domain::transaction_bancaire::{
-    NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
+    TransactionStatus,
 };
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
@@ -102,7 +104,8 @@ impl SqlxBankTransactionsRepository {
     ) -> Result<Option<TransactionBancaire>, ChiffrementError> {
         let Some(row) = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
-             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, t.created_at \
+             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
+             t.category_id, t.categorization_source, t.rule_id, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE t.id = $1",
@@ -136,7 +139,8 @@ impl SqlxBankTransactionsRepository {
 
         let rows = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
-             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, t.created_at \
+             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
+             t.category_id, t.categorization_source, t.rule_id, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE t.bank_account_id = $1 AND a.owner_id = $2 \
@@ -227,6 +231,9 @@ type BankTransactionRow = (
     String,
     Option<NaiveDate>,
     Option<NaiveDate>,
+    Option<Uuid>,
+    String,
+    Option<Uuid>,
     DateTime<Utc>,
 );
 
@@ -245,6 +252,9 @@ fn into_transaction(
         currency,
         booking_date,
         value_date,
+        category_id,
+        categorization_source,
+        rule_id,
         created_at,
     ) = row;
 
@@ -259,6 +269,8 @@ fn into_transaction(
     let amount_cents = dechiffrer_montant(crypto, &owner_id, TABLE, FIELD_AMOUNT, &amount_blob)?;
     let status = TransactionStatus::parse(&status)
         .ok_or_else(|| ChiffrementError::UnknownEnum(status.clone()))?;
+    let categorization_source = CategorizationSource::parse(&categorization_source)
+        .ok_or_else(|| ChiffrementError::UnknownEnum(categorization_source.clone()))?;
 
     Ok(TransactionBancaire {
         id: TransactionBancaireId(id),
@@ -270,6 +282,9 @@ fn into_transaction(
         currency,
         booking_date,
         value_date,
+        category: category_id.map(CategoryId),
+        categorization_source,
+        rule_id,
         created_at,
     })
 }

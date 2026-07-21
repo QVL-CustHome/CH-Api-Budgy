@@ -1,9 +1,40 @@
 use crate::domain::bank_account::BankAccountId;
+use crate::domain::category::CategoryId;
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionBancaireId(pub Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CategorizationSource {
+    Manual,
+    Rule,
+    None,
+}
+
+impl CategorizationSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CategorizationSource::Manual => "manual",
+            CategorizationSource::Rule => "rule",
+            CategorizationSource::None => "none",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "manual" => Some(CategorizationSource::Manual),
+            "rule" => Some(CategorizationSource::Rule),
+            "none" => Some(CategorizationSource::None),
+            _ => None,
+        }
+    }
+
+    pub fn permet_categorisation_par_regle(&self) -> bool {
+        !matches!(self, CategorizationSource::Manual)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransactionStatus {
@@ -39,6 +70,9 @@ pub struct TransactionBancaire {
     pub currency: String,
     pub booking_date: Option<NaiveDate>,
     pub value_date: Option<NaiveDate>,
+    pub category: Option<CategoryId>,
+    pub categorization_source: CategorizationSource,
+    pub rule_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 

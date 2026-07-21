@@ -9,7 +9,7 @@ use crate::domain::ports::bank_data_source::{
     ReponseAutorisation,
 };
 use crate::domain::transaction_bancaire::{
-    TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, TransactionBancaire, TransactionBancaireId, TransactionStatus,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -60,6 +60,9 @@ impl MockBankDataSource {
             currency: DEVISE.to_string(),
             booking_date: Some(booking - Duration::days(3)),
             value_date: Some(booking - Duration::days(3)),
+            category: None,
+            categorization_source: CategorizationSource::None,
+            rule_id: None,
             created_at: cree_le,
         };
 
@@ -73,6 +76,9 @@ impl MockBankDataSource {
             currency: DEVISE.to_string(),
             booking_date: Some(booking - Duration::days(1)),
             value_date: Some(booking - Duration::days(1)),
+            category: None,
+            categorization_source: CategorizationSource::None,
+            rule_id: None,
             created_at: cree_le,
         };
 
@@ -93,6 +99,9 @@ impl MockBankDataSource {
             currency: DEVISE.to_string(),
             booking_date: date_evolutive,
             value_date: date_evolutive,
+            category: None,
+            categorization_source: CategorizationSource::None,
+            rule_id: None,
             created_at: cree_le,
         };
 
