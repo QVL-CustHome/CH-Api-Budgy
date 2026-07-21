@@ -1,7 +1,7 @@
 use crate::handlers;
 use crate::state::AppState;
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 
 pub const API_VERSION_PREFIX: &str = "/v1";
 
@@ -27,6 +27,15 @@ fn public_routes() -> Router<AppState> {
         .route(
             "/accounts/{account_id}/transactions",
             get(handlers::comptes::list_account_transactions),
+        )
+        .route(
+            "/categories",
+            get(handlers::categories::list_categories).post(handlers::categories::create_category),
+        )
+        .route(
+            "/categories/{category_id}",
+            put(handlers::categories::update_category)
+                .delete(handlers::categories::delete_category),
         )
         .route("/banks", get(handlers::banques::list_banks))
         .route(
