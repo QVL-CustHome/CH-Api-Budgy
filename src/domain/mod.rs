@@ -19,5 +19,6 @@ pub use ports::bank_data_source::{
     BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,
 };
 pub use transaction_bancaire::{
-    NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
+    TransactionStatus,
 };
