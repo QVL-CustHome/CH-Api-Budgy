@@ -239,7 +239,13 @@ async fn creer_categorie_depense(db: &DisposableDb, sub: &str, nom: &str) -> Str
     corps["id"].as_str().expect("id présent").to_string()
 }
 
-async fn categoriser(db: &DisposableDb, sub: &str, compte: &BankAccountId, transaction: Uuid, categorie: &str) {
+async fn categoriser(
+    db: &DisposableDb,
+    sub: &str,
+    compte: &BankAccountId,
+    transaction: Uuid,
+    categorie: &str,
+) {
     let (status, corps) = appel(
         db,
         "PUT",
@@ -251,7 +257,11 @@ async fn categoriser(db: &DisposableDb, sub: &str, compte: &BankAccountId, trans
         Some(json!({ "category_id": categorie })),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "catégorisation attendue OK : {corps}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "catégorisation attendue OK : {corps}"
+    );
 }
 
 async fn depenses_du_mois(db: &DisposableDb, sub: &str, mois: &str) -> (StatusCode, Value) {
@@ -333,7 +343,10 @@ async fn ca01_montants_exposes_en_magnitude_positive() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(corps["total_cents"], json!(4_590));
     assert!(corps["total_cents"].as_i64().unwrap() > 0);
-    assert_eq!(entree_par_categorie(&corps, &categorie_id)["amount_cents"], json!(4_590));
+    assert_eq!(
+        entree_par_categorie(&corps, &categorie_id)["amount_cents"],
+        json!(4_590)
+    );
 
     db.destroy().await;
 }

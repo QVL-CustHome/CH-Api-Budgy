@@ -17,10 +17,10 @@ use ch_api_budgy::domain::transaction_bancaire::{NouvelleTransactionBancaire, Tr
 use ch_api_budgy::repository::balances::SqlxBalancesWriteAdapter;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
-use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
-use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
+use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
+use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;

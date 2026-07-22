@@ -219,7 +219,12 @@ impl SqlxBankTransactionsRepository {
             .map(|row| into_transaction(crypto, row))
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(filtrer_trier_paginer(transactions, filtre.sens, tri, tranche))
+        Ok(filtrer_trier_paginer(
+            transactions,
+            filtre.sens,
+            tri,
+            tranche,
+        ))
     }
 
     pub async fn categoriser(

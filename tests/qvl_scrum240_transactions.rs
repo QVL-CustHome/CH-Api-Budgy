@@ -17,8 +17,8 @@ use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
-use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
+use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;
@@ -273,9 +273,23 @@ async fn ca02_filtre_account_id_n_expose_que_le_compte_cible() {
     let db = db_or_skip!();
     let crypto = crypto();
     let consent_a = consent(&db, &crypto, OWNER).await;
-    let compte_a = compte(&db, &crypto, OWNER, consent_a, "FR7630006000011234567890189").await;
+    let compte_a = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent_a,
+        "FR7630006000011234567890189",
+    )
+    .await;
     let consent_b = consent(&db, &crypto, OWNER).await;
-    let compte_b = compte(&db, &crypto, OWNER, consent_b, "FR7610107001011234567890129").await;
+    let compte_b = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent_b,
+        "FR7610107001011234567890129",
+    )
+    .await;
     transaction(SeedTransaction {
         db: &db,
         crypto: &crypto,
@@ -524,23 +538,14 @@ async fn ca03_tri_par_date_ascendant_et_descendant() {
     })
     .await;
 
-    let (_, asc) = get(
-        &db,
-        &crypto,
-        OWNER,
-        "/v1/transactions?sort=date&order=asc",
-    )
-    .await;
+    let (_, asc) = get(&db, &crypto, OWNER, "/v1/transactions?sort=date&order=asc").await;
     assert_eq!(labels(&body_json(&asc)), vec!["ANCIEN", "MILIEU", "RECENT"]);
 
-    let (_, desc) = get(
-        &db,
-        &crypto,
-        OWNER,
-        "/v1/transactions?sort=date&order=desc",
-    )
-    .await;
-    assert_eq!(labels(&body_json(&desc)), vec!["RECENT", "MILIEU", "ANCIEN"]);
+    let (_, desc) = get(&db, &crypto, OWNER, "/v1/transactions?sort=date&order=desc").await;
+    assert_eq!(
+        labels(&body_json(&desc)),
+        vec!["RECENT", "MILIEU", "ANCIEN"]
+    );
 
     db.destroy().await;
 }
@@ -734,7 +739,14 @@ async fn idor_un_owner_ne_voit_que_ses_propres_transactions() {
     let db = db_or_skip!();
     let crypto = crypto();
     let consent_owner = consent(&db, &crypto, OWNER).await;
-    let compte_owner = compte(&db, &crypto, OWNER, consent_owner, "FR7630006000011234567890189").await;
+    let compte_owner = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent_owner,
+        "FR7630006000011234567890189",
+    )
+    .await;
     transaction(SeedTransaction {
         db: &db,
         crypto: &crypto,

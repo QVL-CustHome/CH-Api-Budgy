@@ -14,12 +14,12 @@ use ch_api_budgy::domain::ports::ecriture::{
 };
 use ch_api_budgy::repository::balances::SqlxBalancesWriteAdapter;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
+use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
-use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
+use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
-use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::JwtService;
 use ch_api_budgy::state::AppState;
@@ -93,7 +93,11 @@ fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
     }
 }
 
-async fn get_balance(db: &DisposableDb, crypto: &Arc<CryptoService>, owner: &str) -> (StatusCode, Value) {
+async fn get_balance(
+    db: &DisposableDb,
+    crypto: &Arc<CryptoService>,
+    owner: &str,
+) -> (StatusCode, Value) {
     let request = Request::builder()
         .method("GET")
         .uri("/v1/balance")
@@ -217,7 +221,14 @@ async fn ca01_solde_consolide_egale_somme_et_liste_chaque_compte() {
     let db = db_or_skip!();
     let crypto = crypto();
     let consent = consent(&db, &crypto, OWNER).await;
-    let compte_a = compte(&db, &crypto, OWNER, consent.clone(), "FR7630006000011234567890189").await;
+    let compte_a = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent.clone(),
+        "FR7630006000011234567890189",
+    )
+    .await;
     let compte_b = compte(&db, &crypto, OWNER, consent, "FR7610107001011234567890129").await;
     balance(&db, &crypto, &compte_a, BalanceType::Booked, 15_327).await;
     balance(&db, &crypto, &compte_b, BalanceType::Booked, 4_673).await;
@@ -270,11 +281,25 @@ async fn anti_idor_un_owner_ne_voit_que_ses_propres_comptes() {
     let db = db_or_skip!();
     let crypto = crypto();
     let consent_owner = consent(&db, &crypto, OWNER).await;
-    let compte_owner = compte(&db, &crypto, OWNER, consent_owner, "FR7630006000011234567890189").await;
+    let compte_owner = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent_owner,
+        "FR7630006000011234567890189",
+    )
+    .await;
     balance(&db, &crypto, &compte_owner, BalanceType::Booked, 5_000).await;
 
     let consent_intrus = consent(&db, &crypto, AUTRE_OWNER).await;
-    let compte_intrus = compte(&db, &crypto, AUTRE_OWNER, consent_intrus, "FR7610107001011234567890129").await;
+    let compte_intrus = compte(
+        &db,
+        &crypto,
+        AUTRE_OWNER,
+        consent_intrus,
+        "FR7610107001011234567890129",
+    )
+    .await;
     balance(&db, &crypto, &compte_intrus, BalanceType::Booked, 999_999).await;
 
     let (status, body) = get_balance(&db, &crypto, OWNER).await;
@@ -312,11 +337,24 @@ async fn ca01_chaque_balance_deserialise_en_entier_scalaire_et_total_egale_la_so
     let db = db_or_skip!();
     let crypto = crypto();
     let consent = consent(&db, &crypto, OWNER).await;
-    let compte_avec_solde =
-        compte(&db, &crypto, OWNER, consent.clone(), "FR7630006000011234567890189").await;
+    let compte_avec_solde = compte(
+        &db,
+        &crypto,
+        OWNER,
+        consent.clone(),
+        "FR7630006000011234567890189",
+    )
+    .await;
     let compte_sans_solde =
         compte(&db, &crypto, OWNER, consent, "FR7610107001011234567890129").await;
-    balance(&db, &crypto, &compte_avec_solde, BalanceType::Booked, 15_327).await;
+    balance(
+        &db,
+        &crypto,
+        &compte_avec_solde,
+        BalanceType::Booked,
+        15_327,
+    )
+    .await;
 
     let (status, body) = get_balance(&db, &crypto, OWNER).await;
 
