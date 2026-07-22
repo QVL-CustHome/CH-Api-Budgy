@@ -8,6 +8,7 @@ pub mod depense;
 pub mod effacement;
 pub mod horloge;
 pub mod ports;
+pub mod previsionnel;
 pub mod recurrence;
 pub mod regle_categorisation;
 pub mod reste_a_depenser;
@@ -24,6 +25,9 @@ pub use consent::{
 };
 pub use ports::bank_data_source::{
     BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,
+};
+pub use previsionnel::{
+    LignePrevisionCategorie, OccurrenceRecurrente, Previsionnel, calculer_previsionnel,
 };
 pub use recurrence::{
     OccurrenceTransaction, RecurrenceInterval, TransactionRecurrente, detecter_recurrences,
