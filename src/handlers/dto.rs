@@ -3,6 +3,7 @@ use crate::domain::balance::{Balance, BalanceType};
 use crate::domain::bank_account::BankAccount;
 use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
+use crate::domain::depense::{LigneDepenseCategorie, Mois, RepartitionDepenses};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
 use crate::domain::regle_categorisation::RegleCategorisation;
@@ -354,4 +355,59 @@ impl From<TransactionBancaire> for BankTransactionDto {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CategorizeTransactionRequest {
     pub category_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpenseCategoryBreakdownDto {
+    pub category_id: Option<Uuid>,
+    pub category_name: Option<String>,
+    pub kind: Option<CategoryKindDto>,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub amount_cents: Centimes,
+}
+
+impl From<LigneDepenseCategorie> for ExpenseCategoryBreakdownDto {
+    fn from(ligne: LigneDepenseCategorie) -> Self {
+        let amount_cents = Centimes(ligne.montant_cents);
+        match ligne.category {
+            Some(category) => Self {
+                category_id: Some(category.id.0),
+                category_name: Some(category.name),
+                kind: Some(category.kind.into()),
+                color: Some(category.color),
+                icon: Some(category.icon),
+                amount_cents,
+            },
+            None => Self {
+                category_id: None,
+                category_name: None,
+                kind: None,
+                color: None,
+                icon: None,
+                amount_cents,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MonthlyExpensesDto {
+    pub month: String,
+    pub total_cents: Centimes,
+    pub categories: Vec<ExpenseCategoryBreakdownDto>,
+}
+
+impl MonthlyExpensesDto {
+    pub fn depuis(mois: Mois, repartition: RepartitionDepenses) -> Self {
+        Self {
+            month: mois.to_string(),
+            total_cents: Centimes(repartition.total_cents),
+            categories: repartition
+                .lignes
+                .into_iter()
+                .map(ExpenseCategoryBreakdownDto::from)
+                .collect(),
+        }
+    }
 }

@@ -24,10 +24,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
-const TABLE: &str = "bank_transaction";
+pub(crate) const TABLE: &str = "bank_transaction";
 const FIELD_EXTERNAL_TRANSACTION_ID: &str = "external_transaction_id";
 const FIELD_LABEL: &str = "label";
-const FIELD_AMOUNT: &str = "amount_cents";
+pub(crate) const FIELD_AMOUNT: &str = "amount_cents";
 const LIMITE_RETROACTIF: i64 = 5000;
 
 fn dedup_key_transaction(

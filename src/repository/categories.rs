@@ -103,7 +103,7 @@ impl CategoriesWriteRepository for SqlxCategoriesRepository {
     }
 }
 
-type CategoryRow = (
+pub(crate) type CategoryRow = (
     Uuid,
     Option<String>,
     String,
@@ -135,7 +135,7 @@ fn into_categorie_avec_compteur(
     })
 }
 
-fn into_category(row: CategoryRow) -> Result<Category, LectureError> {
+pub(crate) fn into_category(row: CategoryRow) -> Result<Category, LectureError> {
     let (id, owner_id, name, kind, color, icon, created_at) = row;
 
     let kind = CategoryKind::parse(&kind)
