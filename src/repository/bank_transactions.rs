@@ -7,13 +7,14 @@ use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
 };
 use crate::domain::ports::lecture::{
-    FiltreTransactions, LectureError, LectureResultat, ReglesCategorisationReadRepository, Tranche,
-    TransactionsBancairesReadRepository,
+    FiltreTransactions, FiltreTransactionsProprietaire, LectureError, LectureResultat,
+    ReglesCategorisationReadRepository, Tranche, TransactionsBancairesReadRepository,
 };
 use crate::domain::regle_categorisation::{RegleCategorisation, selectionner_regle};
 use crate::domain::transaction_bancaire::{
-    CategorisationTransaction, CategorizationSource, NouvelleTransactionBancaire,
-    TransactionBancaire, TransactionBancaireId, TransactionStatus,
+    CategorisationTransaction, CategorizationSource, ChampTriTransaction,
+    NouvelleTransactionBancaire, OrdreTri, SensTransaction, TransactionBancaire,
+    TransactionBancaireId, TransactionStatus, TriTransactions,
 };
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
@@ -175,6 +176,45 @@ impl SqlxBankTransactionsRepository {
             elements,
             total: total.max(0) as u64,
         })
+    }
+
+    pub async fn lister_pour_proprietaire(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+        filtre: FiltreTransactionsProprietaire,
+        tri: TriTransactions,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<TransactionBancaire>, ChiffrementError> {
+        let compte = filtre.compte.as_ref().map(|c| c.0);
+        let categorie = filtre.categorie.as_ref().map(|c| c.0);
+
+        let rows = sqlx::query_as::<_, BankTransactionRow>(
+            "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
+             t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
+             t.category_id, t.categorization_source, t.rule_id, t.created_at \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE a.owner_id = $1 \
+             AND ($2::uuid IS NULL OR t.bank_account_id = $2) \
+             AND ($3::uuid IS NULL OR t.category_id = $3) \
+             AND ($4::date IS NULL OR COALESCE(t.booking_date, t.value_date) >= $4) \
+             AND ($5::date IS NULL OR COALESCE(t.booking_date, t.value_date) <= $5)",
+        )
+        .bind(&proprietaire.0)
+        .bind(compte)
+        .bind(categorie)
+        .bind(filtre.debut)
+        .bind(filtre.fin)
+        .fetch_all(&self.db)
+        .await?;
+
+        let transactions = rows
+            .into_iter()
+            .map(|row| into_transaction(crypto, row))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(filtrer_trier_paginer(transactions, filtre.sens, tri, tranche))
     }
 
     pub async fn categoriser(
@@ -468,6 +508,61 @@ impl TransactionsBancairesReadRepository for SqlxBankTransactionsWriteAdapter {
             .await
             .map_err(|e| LectureError::Acces(e.to_string()))
     }
+
+    async fn lister_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        filtre: FiltreTransactionsProprietaire,
+        tri: TriTransactions,
+        tranche: Tranche,
+    ) -> Result<LectureResultat<TransactionBancaire>, LectureError> {
+        self.repo
+            .lister_pour_proprietaire(&self.crypto, proprietaire, filtre, tri, tranche)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+}
+
+fn filtrer_trier_paginer(
+    transactions: Vec<TransactionBancaire>,
+    sens: Option<SensTransaction>,
+    tri: TriTransactions,
+    tranche: Tranche,
+) -> LectureResultat<TransactionBancaire> {
+    let mut filtrees = match sens {
+        Some(sens) => transactions
+            .into_iter()
+            .filter(|transaction| transaction.sens() == sens)
+            .collect::<Vec<_>>(),
+        None => transactions,
+    };
+
+    trier(&mut filtrees, tri);
+
+    let total = filtrees.len() as u64;
+    let elements = filtrees
+        .into_iter()
+        .skip(tranche.offset as usize)
+        .take(tranche.limit as usize)
+        .collect();
+
+    LectureResultat { elements, total }
+}
+
+fn trier(transactions: &mut [TransactionBancaire], tri: TriTransactions) {
+    transactions.sort_by(|gauche, droite| {
+        let base = match tri.champ {
+            ChampTriTransaction::Date => gauche.date_effective().cmp(&droite.date_effective()),
+            ChampTriTransaction::Montant => gauche.amount_cents.cmp(&droite.amount_cents),
+        }
+        .then_with(|| gauche.created_at.cmp(&droite.created_at))
+        .then_with(|| gauche.id.0.cmp(&droite.id.0));
+
+        match tri.ordre {
+            OrdreTri::Ascendant => base,
+            OrdreTri::Descendant => base.reverse(),
+        }
+    });
 }
 
 type BankTransactionRow = (

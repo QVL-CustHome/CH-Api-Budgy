@@ -1,11 +1,11 @@
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::{BankAccount, BankAccountId, CompteASynchroniser};
-use crate::domain::category::Category;
+use crate::domain::category::{Category, CategoryId};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::regle_categorisation::RegleCategorisation;
-use crate::domain::transaction_bancaire::TransactionBancaire;
-use chrono::{DateTime, Utc};
+use crate::domain::transaction_bancaire::{SensTransaction, TransactionBancaire, TriTransactions};
+use chrono::{DateTime, NaiveDate, Utc};
 use std::future::Future;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,12 +103,29 @@ pub struct FiltreTransactions {
     pub non_categorisees: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct FiltreTransactionsProprietaire {
+    pub compte: Option<BankAccountId>,
+    pub categorie: Option<CategoryId>,
+    pub debut: Option<NaiveDate>,
+    pub fin: Option<NaiveDate>,
+    pub sens: Option<SensTransaction>,
+}
+
 pub trait TransactionsBancairesReadRepository: Send + Sync {
     fn lister_par_compte(
         &self,
         proprietaire: &ProprietaireId,
         compte: &BankAccountId,
         filtre: FiltreTransactions,
+        tranche: Tranche,
+    ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
+
+    fn lister_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+        filtre: FiltreTransactionsProprietaire,
+        tri: TriTransactions,
         tranche: Tranche,
     ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
 }

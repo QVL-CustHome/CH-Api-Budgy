@@ -48,3 +48,55 @@ impl ListQuery {
         .validate()
     }
 }
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionKindFilter {
+    Credit,
+    Debit,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionSortField {
+    Date,
+    Amount,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct TransactionsQuery {
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+    pub account_id: Option<Uuid>,
+    pub category_id: Option<Uuid>,
+    pub from: Option<NaiveDate>,
+    pub to: Option<NaiveDate>,
+    pub r#type: Option<TransactionKindFilter>,
+    pub sort: Option<TransactionSortField>,
+    pub order: Option<SortDirection>,
+}
+
+impl TransactionsQuery {
+    pub fn pagination(&self) -> Result<Pagination, ApiError> {
+        PaginationParams {
+            limit: self.limit,
+            offset: self.offset,
+        }
+        .resolve()
+    }
+
+    pub fn date_range(&self) -> Result<DateRangeFilter, ApiError> {
+        DateRangeFilter {
+            from: self.from,
+            to: self.to,
+        }
+        .validate()
+    }
+}
