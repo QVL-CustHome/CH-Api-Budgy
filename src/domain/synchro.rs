@@ -210,6 +210,8 @@ where
         let vue = vue_bank_account(&compte, maintenant);
         match self.remonter_donnees(&consent, &vue, rapport).await {
             Ok(remontee) => {
+                self.recalculer_recurrences_apres_insertion(&proprietaire, &remontee)
+                    .await;
                 self.publier_succes(&proprietaire, &reference_compte, &remontee, maintenant)
                     .await;
                 rapport.comptes_synchronises += 1;
@@ -273,6 +275,22 @@ where
         }
 
         Ok(remontee)
+    }
+
+    async fn recalculer_recurrences_apres_insertion(
+        &self,
+        proprietaire: &ProprietaireId,
+        remontee: &RemonteeCompte,
+    ) {
+        if remontee.transactions_inserees == 0 {
+            return;
+        }
+        if let Err(erreur) = self.transactions.recalculer_recurrences(proprietaire).await {
+            tracing::warn!(
+                cause = %erreur,
+                "recalcul des transactions récurrentes ignoré après insertion"
+            );
+        }
     }
 
     async fn publier_succes(

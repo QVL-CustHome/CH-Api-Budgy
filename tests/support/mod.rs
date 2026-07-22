@@ -48,6 +48,13 @@ impl BankTransactionsWriteRepository for TransactionsMemoireStub {
             Uuid::new_v4(),
         )))
     }
+
+    async fn recalculer_recurrences(
+        &self,
+        _proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        Ok(0)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -143,6 +150,8 @@ impl BankDataSource for SourceBancaireFake {
             category: None,
             categorization_source: CategorizationSource::None,
             rule_id: None,
+            is_recurrent: false,
+            recurrence_interval: None,
             created_at: Utc.with_ymd_and_hms(2026, 6, 27, 0, 0, 0).unwrap(),
         }])
     }

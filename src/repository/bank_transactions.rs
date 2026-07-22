@@ -10,6 +10,7 @@ use crate::domain::ports::lecture::{
     FiltreTransactions, LectureError, LectureResultat, ReglesCategorisationReadRepository, Tranche,
     TransactionsBancairesReadRepository,
 };
+use crate::domain::recurrence::{OccurrenceTransaction, RecurrenceInterval, detecter_recurrences};
 use crate::domain::regle_categorisation::{RegleCategorisation, selectionner_regle};
 use crate::domain::transaction_bancaire::{
     CategorisationTransaction, CategorizationSource, NouvelleTransactionBancaire,
@@ -21,6 +22,7 @@ use crate::repository::chiffrement::{
 };
 use crate::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use chrono::{DateTime, NaiveDate, Utc};
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -109,7 +111,8 @@ impl SqlxBankTransactionsRepository {
         let Some(row) = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.created_at \
+             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE t.id = $1",
@@ -151,7 +154,8 @@ impl SqlxBankTransactionsRepository {
         let rows = sqlx::query_as::<_, BankTransactionRow>(&format!(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.created_at \
+             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE t.bank_account_id = $1 AND a.owner_id = $2{condition_categorisation} \
@@ -328,6 +332,110 @@ impl SqlxBankTransactionsRepository {
                 .await?;
         Ok(owner)
     }
+
+    pub async fn recalculer_recurrences(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, ChiffrementError> {
+        let occurrences = self
+            .lister_occurrences_pour_detection(crypto, proprietaire)
+            .await?;
+        let recurrentes = detecter_recurrences(&occurrences);
+
+        self.reinitialiser_recurrences(proprietaire).await?;
+
+        let mut par_interval: HashMap<RecurrenceInterval, Vec<Uuid>> = HashMap::new();
+        for recurrente in recurrentes {
+            par_interval
+                .entry(recurrente.interval)
+                .or_default()
+                .push(recurrente.id.0);
+        }
+
+        let mut marquees = 0;
+        for (interval, ids) in par_interval {
+            marquees += self
+                .marquer_recurrentes(proprietaire, interval, &ids)
+                .await?;
+        }
+        Ok(marquees)
+    }
+
+    async fn lister_occurrences_pour_detection(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<OccurrenceTransaction>, ChiffrementError> {
+        let rows: Vec<(Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>)> =
+            sqlx::query_as(
+                "SELECT t.id, t.label, t.amount_cents, t.booking_date, t.value_date \
+                 FROM budgy.bank_transaction t \
+                 JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+                 WHERE a.owner_id = $1",
+            )
+            .bind(&proprietaire.0)
+            .fetch_all(&self.db)
+            .await?;
+
+        let mut occurrences = Vec::with_capacity(rows.len());
+        for (id, label_blob, amount_blob, booking_date, value_date) in rows {
+            let Some(date) = booking_date.or(value_date) else {
+                continue;
+            };
+            let label = dechiffrer_texte(crypto, &proprietaire.0, TABLE, FIELD_LABEL, &label_blob)?;
+            let amount_cents =
+                dechiffrer_montant(crypto, &proprietaire.0, TABLE, FIELD_AMOUNT, &amount_blob)?;
+            occurrences.push(OccurrenceTransaction {
+                id: TransactionBancaireId(id),
+                label,
+                amount_cents,
+                date,
+            });
+        }
+        Ok(occurrences)
+    }
+
+    async fn reinitialiser_recurrences(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<(), ChiffrementError> {
+        sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET is_recurrent = false, recurrence_interval = NULL \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id AND a.owner_id = $1 AND t.is_recurrent = true",
+        )
+        .bind(&proprietaire.0)
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    async fn marquer_recurrentes(
+        &self,
+        proprietaire: &ProprietaireId,
+        interval: RecurrenceInterval,
+        ids: &[Uuid],
+    ) -> Result<u64, ChiffrementError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let touchees = sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET is_recurrent = true, recurrence_interval = $1 \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id AND t.id = ANY($2) AND a.owner_id = $3",
+        )
+        .bind(interval.as_str())
+        .bind(ids)
+        .bind(&proprietaire.0)
+        .execute(&self.db)
+        .await?
+        .rows_affected();
+        Ok(touchees)
+    }
 }
 
 #[derive(Clone)]
@@ -453,6 +561,16 @@ impl BankTransactionsWriteRepository for SqlxBankTransactionsWriteAdapter {
 
         Ok(resultat)
     }
+
+    async fn recalculer_recurrences(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        self.repo
+            .recalculer_recurrences(&self.crypto, proprietaire)
+            .await
+            .map_err(vers_ecriture_error)
+    }
 }
 
 impl TransactionsBancairesReadRepository for SqlxBankTransactionsWriteAdapter {
@@ -484,6 +602,8 @@ type BankTransactionRow = (
     Option<Uuid>,
     String,
     Option<Uuid>,
+    bool,
+    Option<String>,
     DateTime<Utc>,
 );
 
@@ -505,6 +625,8 @@ fn into_transaction(
         category_id,
         categorization_source,
         rule_id,
+        is_recurrent,
+        recurrence_interval,
         created_at,
     ) = row;
 
@@ -521,6 +643,13 @@ fn into_transaction(
         .ok_or_else(|| ChiffrementError::UnknownEnum(status.clone()))?;
     let categorization_source = CategorizationSource::parse(&categorization_source)
         .ok_or_else(|| ChiffrementError::UnknownEnum(categorization_source.clone()))?;
+    let recurrence_interval = match recurrence_interval {
+        Some(value) => Some(
+            RecurrenceInterval::parse(&value)
+                .ok_or_else(|| ChiffrementError::UnknownEnum(value.clone()))?,
+        ),
+        None => None,
+    };
 
     Ok(TransactionBancaire {
         id: TransactionBancaireId(id),
@@ -535,6 +664,8 @@ fn into_transaction(
         category: category_id.map(CategoryId),
         categorization_source,
         rule_id,
+        is_recurrent,
+        recurrence_interval,
         created_at,
     })
 }

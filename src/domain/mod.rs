@@ -6,6 +6,7 @@ pub mod consent;
 pub mod effacement;
 pub mod horloge;
 pub mod ports;
+pub mod recurrence;
 pub mod regle_categorisation;
 pub mod synchro;
 pub mod transaction_bancaire;
@@ -18,6 +19,9 @@ pub use consent::{
 };
 pub use ports::bank_data_source::{
     BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,
+};
+pub use recurrence::{
+    OccurrenceTransaction, RecurrenceInterval, TransactionRecurrente, detecter_recurrences,
 };
 pub use regle_categorisation::{
     LabelPattern, NouvelleRegleCategorisation, RegleCategorisation, RegleCategorisationId,
