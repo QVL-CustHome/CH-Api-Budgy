@@ -19,8 +19,8 @@ pub async fn upsert_budget(
     Json(payload): Json<UpsertBudgetRequest>,
 ) -> Result<(StatusCode, Json<BudgetDto>), ApiError> {
     let proprietaire = ProprietaireId(user.owner_id().to_string());
-    let montant_prevu =
-        MontantPrevu::parse(payload.montant_cents).map_err(|e| ApiError::validation(e.to_string()))?;
+    let montant_prevu = MontantPrevu::parse(payload.montant_cents)
+        .map_err(|e| ApiError::validation(e.to_string()))?;
     let mois = MoisBudget::parse(&payload.mois).map_err(|e| ApiError::validation(e.to_string()))?;
 
     let budget = state

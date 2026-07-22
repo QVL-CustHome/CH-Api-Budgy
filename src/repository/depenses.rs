@@ -44,9 +44,14 @@ impl SqlxDepensesRepository {
 
         let mut totaux: HashMap<Option<Uuid>, i64> = HashMap::new();
         for (category_id, amount_blob) in rows {
-            let montant =
-                dechiffrer_montant(&self.crypto, &proprietaire.0, TABLE, FIELD_AMOUNT, &amount_blob)
-                    .map_err(|e| LectureError::Acces(e.to_string()))?;
+            let montant = dechiffrer_montant(
+                &self.crypto,
+                &proprietaire.0,
+                TABLE,
+                FIELD_AMOUNT,
+                &amount_blob,
+            )
+            .map_err(|e| LectureError::Acces(e.to_string()))?;
             if montant < 0 {
                 *totaux.entry(category_id).or_insert(0) += montant.abs();
             }
