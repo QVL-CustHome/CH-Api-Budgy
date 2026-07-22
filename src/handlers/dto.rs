@@ -8,6 +8,7 @@ use crate::domain::depense::{LigneDepenseCategorie, Mois, RepartitionDepenses};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
 use crate::domain::regle_categorisation::RegleCategorisation;
+use crate::domain::reste_a_depenser::{ResteADepenser, ResteCategorie};
 use crate::domain::solde_consolide::SoldeConsolide;
 use crate::domain::transaction_bancaire::{
     CategorizationSource, TransactionBancaire, TransactionStatus,
@@ -483,6 +484,65 @@ impl MonthlyExpensesDto {
                 .lignes
                 .into_iter()
                 .map(ExpenseCategoryBreakdownDto::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategoryRemainingDto {
+    pub category_id: Uuid,
+    pub category_name: Option<String>,
+    pub kind: Option<CategoryKindDto>,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub montant_prevu_cents: Centimes,
+    pub depense_cents: Centimes,
+    pub reste_cents: Centimes,
+    pub depassement_cents: Centimes,
+    pub depasse: bool,
+}
+
+impl From<ResteCategorie> for CategoryRemainingDto {
+    fn from(ligne: ResteCategorie) -> Self {
+        let (category_name, kind, color, icon) = match ligne.category {
+            Some(category) => (
+                Some(category.name),
+                Some(category.kind.into()),
+                Some(category.color),
+                Some(category.icon),
+            ),
+            None => (None, None, None, None),
+        };
+        Self {
+            category_id: ligne.category_id.0,
+            category_name,
+            kind,
+            color,
+            icon,
+            montant_prevu_cents: Centimes(ligne.montant_prevu_cents),
+            depense_cents: Centimes(ligne.depense_cents),
+            reste_cents: Centimes(ligne.reste_cents),
+            depassement_cents: Centimes(ligne.depassement_cents),
+            depasse: ligne.depasse,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemainingBudgetDto {
+    pub month: String,
+    pub categories: Vec<CategoryRemainingDto>,
+}
+
+impl RemainingBudgetDto {
+    pub fn depuis(mois: Mois, reste: ResteADepenser) -> Self {
+        Self {
+            month: mois.to_string(),
+            categories: reste
+                .lignes
+                .into_iter()
+                .map(CategoryRemainingDto::from)
                 .collect(),
         }
     }
