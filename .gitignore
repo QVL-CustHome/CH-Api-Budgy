@@ -10,3 +10,6 @@
 
 # Logs runtime (jamais commités)
 .startup-budgy.log
+
+# Worktrees git locaux (jamais commités)
+.worktrees/
