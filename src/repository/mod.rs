@@ -1,6 +1,7 @@
 pub mod balances;
 pub mod bank_accounts;
 pub mod bank_transactions;
+pub mod budgets;
 pub mod categories;
 pub mod chiffrement;
 pub mod consents;
