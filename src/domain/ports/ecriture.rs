@@ -113,6 +113,11 @@ pub trait BankTransactionsWriteRepository: Send + Sync {
         &self,
         nouvelle: NouvelleTransactionBancaire,
     ) -> impl Future<Output = Result<ResultatInsertion<TransactionBancaireId>, EcritureError>> + Send;
+
+    fn recalculer_recurrences(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<u64, EcritureError>> + Send;
 }
 
 pub trait PlanificationSynchroWriteRepository: Send + Sync {

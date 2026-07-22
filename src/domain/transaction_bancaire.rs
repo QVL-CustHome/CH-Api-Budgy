@@ -1,5 +1,6 @@
 use crate::domain::bank_account::BankAccountId;
 use crate::domain::category::CategoryId;
+use crate::domain::recurrence::RecurrenceInterval;
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
@@ -69,6 +70,8 @@ pub struct TransactionBancaire {
     pub category: Option<CategoryId>,
     pub categorization_source: CategorizationSource,
     pub rule_id: Option<Uuid>,
+    pub is_recurrent: bool,
+    pub recurrence_interval: Option<RecurrenceInterval>,
     pub created_at: DateTime<Utc>,
 }
 
