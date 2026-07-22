@@ -66,7 +66,7 @@ pub fn detecter_recurrences(occurrences: &[OccurrenceTransaction]) -> Vec<Transa
     recurrentes
 }
 
-fn normaliser_marchand(label: &str) -> String {
+pub fn normaliser_marchand(label: &str) -> String {
     label
         .split_whitespace()
         .collect::<Vec<_>>()

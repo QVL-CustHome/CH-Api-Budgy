@@ -58,6 +58,7 @@ fn public_routes() -> Router<AppState> {
             "/budgets/remaining",
             get(handlers::budgets::remaining_budgets),
         )
+        .route("/forecast", get(handlers::previsionnel::get_forecast))
         .route(
             "/expenses/by-category",
             get(handlers::depenses::expenses_by_category),

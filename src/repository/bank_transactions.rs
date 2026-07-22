@@ -8,8 +8,10 @@ use crate::domain::ports::ecriture::{
 };
 use crate::domain::ports::lecture::{
     FiltreTransactions, FiltreTransactionsProprietaire, LectureError, LectureResultat,
-    ReglesCategorisationReadRepository, Tranche, TransactionsBancairesReadRepository,
+    RecurrentsReadRepository, ReglesCategorisationReadRepository, Tranche,
+    TransactionsBancairesReadRepository,
 };
+use crate::domain::previsionnel::OccurrenceRecurrente;
 use crate::domain::recurrence::{OccurrenceTransaction, RecurrenceInterval, detecter_recurrences};
 use crate::domain::regle_categorisation::{RegleCategorisation, selectionner_regle};
 use crate::domain::transaction_bancaire::{
@@ -34,6 +36,13 @@ pub(crate) const FIELD_AMOUNT: &str = "amount_cents";
 const LIMITE_RETROACTIF: i64 = 5000;
 
 type LigneOccurrenceChiffree = (Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
+type LigneRecurrenteChiffree = (
+    Option<Uuid>,
+    Vec<u8>,
+    Vec<u8>,
+    Option<NaiveDate>,
+    Option<NaiveDate>,
+);
 
 fn dedup_key_transaction(
     crypto: &CryptoService,
@@ -443,6 +452,39 @@ impl SqlxBankTransactionsRepository {
         Ok(occurrences)
     }
 
+    async fn lister_recurrents_pour_proprietaire(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<OccurrenceRecurrente>, ChiffrementError> {
+        let rows: Vec<LigneRecurrenteChiffree> = sqlx::query_as(
+            "SELECT t.category_id, t.label, t.amount_cents, t.booking_date, t.value_date \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE a.owner_id = $1 AND t.is_recurrent = true",
+        )
+        .bind(&proprietaire.0)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut occurrences = Vec::with_capacity(rows.len());
+        for (category_id, label_blob, amount_blob, booking_date, value_date) in rows {
+            let Some(date) = booking_date.or(value_date) else {
+                continue;
+            };
+            let label = dechiffrer_texte(crypto, &proprietaire.0, TABLE, FIELD_LABEL, &label_blob)?;
+            let amount_cents =
+                dechiffrer_montant(crypto, &proprietaire.0, TABLE, FIELD_AMOUNT, &amount_blob)?;
+            occurrences.push(OccurrenceRecurrente {
+                category_id: category_id.map(CategoryId),
+                label,
+                amount_cents,
+                date,
+            });
+        }
+        Ok(occurrences)
+    }
+
     async fn reinitialiser_recurrences(
         &self,
         proprietaire: &ProprietaireId,
@@ -643,6 +685,18 @@ impl TransactionsBancairesReadRepository for SqlxBankTransactionsWriteAdapter {
     ) -> Result<LectureResultat<TransactionBancaire>, LectureError> {
         self.repo
             .lister_pour_proprietaire(&self.crypto, proprietaire, filtre, tri, tranche)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+}
+
+impl RecurrentsReadRepository for SqlxBankTransactionsWriteAdapter {
+    async fn lister_recurrents_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<OccurrenceRecurrente>, LectureError> {
+        self.repo
+            .lister_recurrents_pour_proprietaire(&self.crypto, proprietaire)
             .await
             .map_err(|e| LectureError::Acces(e.to_string()))
     }

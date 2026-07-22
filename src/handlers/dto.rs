@@ -7,6 +7,7 @@ use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::depense::{LigneDepenseCategorie, Mois, RepartitionDepenses};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
+use crate::domain::previsionnel::{LignePrevisionCategorie, Previsionnel};
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::reste_a_depenser::{ResteADepenser, ResteCategorie};
 use crate::domain::solde_consolide::SoldeConsolide;
@@ -543,6 +544,56 @@ impl RemainingBudgetDto {
                 .lignes
                 .into_iter()
                 .map(CategoryRemainingDto::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForecastCategoryDto {
+    pub category_id: Option<Uuid>,
+    pub category: Option<String>,
+    pub revenus_recurrents_cents: Centimes,
+    pub depenses_recurrentes_cents: Centimes,
+    pub budget_cents: Centimes,
+}
+
+impl From<LignePrevisionCategorie> for ForecastCategoryDto {
+    fn from(ligne: LignePrevisionCategorie) -> Self {
+        Self {
+            category_id: ligne.category_id.map(|id| id.0),
+            category: ligne.category.map(|category| category.name),
+            revenus_recurrents_cents: Centimes(ligne.revenus_recurrents_cents),
+            depenses_recurrentes_cents: Centimes(ligne.depenses_recurrentes_cents),
+            budget_cents: Centimes(ligne.budget_cents),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForecastDto {
+    pub month: String,
+    pub solde_previsionnel_cents: Centimes,
+    pub revenus_recurrents_cents: Centimes,
+    pub depenses_recurrentes_cents: Centimes,
+    pub budgets_cents: Centimes,
+    pub donnees_suffisantes: bool,
+    pub categories: Vec<ForecastCategoryDto>,
+}
+
+impl ForecastDto {
+    pub fn depuis(mois: Mois, previsionnel: Previsionnel) -> Self {
+        Self {
+            month: mois.to_string(),
+            solde_previsionnel_cents: Centimes(previsionnel.solde_previsionnel_cents),
+            revenus_recurrents_cents: Centimes(previsionnel.revenus_recurrents_cents),
+            depenses_recurrentes_cents: Centimes(previsionnel.depenses_recurrentes_cents),
+            budgets_cents: Centimes(previsionnel.budgets_cents),
+            donnees_suffisantes: previsionnel.donnees_suffisantes,
+            categories: previsionnel
+                .lignes
+                .into_iter()
+                .map(ForecastCategoryDto::from)
                 .collect(),
         }
     }

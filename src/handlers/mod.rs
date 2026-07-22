@@ -1,12 +1,14 @@
 pub mod banques;
 pub mod budgets;
 pub mod categories;
+pub mod commun;
 pub mod comptes;
 pub mod depenses;
 pub mod dto;
 pub mod health;
 mod mapping;
 pub mod me;
+pub mod previsionnel;
 pub mod regles_categorisation;
 pub mod soldes;
 pub mod transactions;
