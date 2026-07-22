@@ -183,6 +183,7 @@ impl ConsentsStatutWriteRepository for ConsentsStatutMemoire {
 struct TransactionsMemoire {
     par_dedup: Arc<Mutex<HashMap<String, TransactionStatus>>>,
     appels: Arc<Mutex<u32>>,
+    recalculs: Arc<Mutex<u32>>,
 }
 
 impl TransactionsMemoire {
@@ -196,6 +197,10 @@ impl TransactionsMemoire {
 
     fn appels(&self) -> u32 {
         *self.appels.lock().expect("appels")
+    }
+
+    fn recalculs(&self) -> u32 {
+        *self.recalculs.lock().expect("recalculs")
     }
 }
 
@@ -223,6 +228,14 @@ impl BankTransactionsWriteRepository for TransactionsMemoire {
             }
             Some(_) => Ok(ResultatInsertion::Doublon),
         }
+    }
+
+    async fn recalculer_recurrences(
+        &self,
+        _proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        *self.recalculs.lock().expect("recalculs") += 1;
+        Ok(0)
     }
 }
 
@@ -367,6 +380,8 @@ fn transaction(
         category: None,
         categorization_source: CategorizationSource::None,
         rule_id: None,
+        is_recurrent: false,
+        recurrence_interval: None,
         created_at: Utc.with_ymd_and_hms(2026, 6, 25, 8, 0, 0).unwrap(),
     }
 }
@@ -457,6 +472,11 @@ async fn seuls_les_comptes_echeants_sont_synchronises() {
     assert_eq!(rapport.comptes_synchronises, 1);
     assert_eq!(banc.comptes.compte(&non_echu.id).sync_count_today, 0);
     assert_eq!(banc.comptes.compte(&echu.id).sync_count_today, 1);
+    assert_eq!(
+        banc.transactions.recalculs(),
+        1,
+        "une insertion déclenche le recalcul des récurrences"
+    );
 }
 
 #[tokio::test]
@@ -484,6 +504,11 @@ async fn le_quota_journalier_est_un_invariant() {
 
     assert!(banc.comptes.compte(&compte.id).sync_count_today <= 4);
     assert_eq!(banc.comptes.compte(&compte.id).sync_count_today, 4);
+    assert_eq!(
+        banc.transactions.recalculs(),
+        0,
+        "aucune transaction insérée : le recalcul n'est jamais déclenché"
+    );
 }
 
 #[tokio::test]
