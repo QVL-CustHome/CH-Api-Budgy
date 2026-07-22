@@ -1,11 +1,12 @@
 use crate::domain::balance::Balance;
 use crate::domain::bank_account::{BankAccount, BankAccountId, CompteASynchroniser};
+use crate::domain::budget::Budget;
 use crate::domain::category::Category;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::TransactionBancaire;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use std::future::Future;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +63,14 @@ pub trait ReglesCategorisationReadRepository: Send + Sync {
         &self,
         proprietaire: &ProprietaireId,
     ) -> impl Future<Output = Result<Vec<RegleCategorisation>, LectureError>> + Send;
+}
+
+pub trait BudgetsReadRepository: Send + Sync {
+    fn lister_par_mois(
+        &self,
+        proprietaire: &ProprietaireId,
+        mois: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<Budget>, LectureError>> + Send;
 }
 
 pub trait BankAccountsReadRepository: Send + Sync {

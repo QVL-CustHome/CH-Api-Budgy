@@ -18,6 +18,7 @@ use ch_api_budgy::repository::balances::SqlxBalancesWriteAdapter;
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
+use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
@@ -75,6 +76,7 @@ fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
             crypto.clone(),
         )),
         categories: Arc::new(SqlxCategoriesRepository::new(db.pool.clone())),
+        budgets: Arc::new(SqlxBudgetsRepository::new(db.pool.clone())),
         regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.pool.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),
@@ -514,13 +516,15 @@ async fn ac06_perimetre_s1_expose_comptes_solde_et_transactions() {
 }
 
 #[tokio::test]
-async fn ac06_endpoint_budgets_absent() {
+async fn ac06_endpoint_budgets_exige_mois() {
     let db = db_or_skip!();
     let crypto = crypto();
 
-    let (status_budgets, _) = get(&db, &crypto, "/v1/budgets").await;
+    let (status_budgets, corps) = get(&db, &crypto, "/v1/budgets").await;
+    let erreur = body_json(&corps);
 
-    assert_eq!(status_budgets, StatusCode::NOT_FOUND);
+    assert_eq!(status_budgets, StatusCode::BAD_REQUEST);
+    assert_eq!(erreur["code"], json!("bad_request"));
 
     db.destroy().await;
 }

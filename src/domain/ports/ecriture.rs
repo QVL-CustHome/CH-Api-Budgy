@@ -1,5 +1,6 @@
 use crate::domain::balance::{BalanceId, NouvelleBalance};
 use crate::domain::bank_account::{BankAccountId, NouveauBankAccount, PlanificationSynchro};
+use crate::domain::budget::{Budget, NouveauBudget};
 use crate::domain::category::{Category, CategoryId, MiseAJourCategorie, NouvelleCategorie};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{
@@ -79,6 +80,13 @@ pub trait ReglesCategorisationWriteRepository: Send + Sync {
         &self,
         nouvelle: NouvelleRegleCategorisation,
     ) -> impl Future<Output = Result<Option<RegleCategorisation>, EcritureError>> + Send;
+}
+
+pub trait BudgetsWriteRepository: Send + Sync {
+    fn enregistrer(
+        &self,
+        nouveau: NouveauBudget,
+    ) -> impl Future<Output = Result<Option<Budget>, EcritureError>> + Send;
 }
 
 pub trait BankAccountsWriteRepository: Send + Sync {
