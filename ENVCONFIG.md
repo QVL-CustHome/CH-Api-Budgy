@@ -49,7 +49,7 @@ Deux familles de variables :
 
 | Variable | Obligatoire | Sensible | Defaut | Format | Description |
 |----------|:-----------:|:--------:|--------|--------|-------------|
-| `BUDGY_TEST_DATABASE_URL` | non (tests) | oui | -- | URI PostgreSQL d'administration | Base d'administration pour les tests d'integration. Le role doit avoir le privilege `CREATEDB` : le harness cree une base jetable par execution, applique les migrations `0001` -> `0012`, puis la detruit. Absente ou base indisponible -> les tests d'integration **se skippent proprement** (pas de panic). Non lue par le runtime. |
+| `BUDGY_TEST_DATABASE_URL` | non (tests) | oui | -- | URI PostgreSQL d'administration | Base d'administration pour les tests d'integration. Le role doit avoir le privilege `CREATEDB` : le harness cree une base jetable par execution, applique les migrations `0001` -> `0014`, puis la detruit. Absente ou base indisponible -> les tests d'integration **se skippent proprement** (pas de panic). Non lue par le runtime. |
 
 ---
 

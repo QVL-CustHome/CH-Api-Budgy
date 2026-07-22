@@ -59,7 +59,19 @@ Comptes bancaires chiffrés (IBAN, libellés et montants déchiffrés côté bac
 - `GET /v1/accounts/{account_id}` — détail d'un compte (même forme qu'un élément de la liste) ; `404 not_found` si le compte n'appartient pas au `sub`.
 - `GET /v1/accounts/{account_id}/transactions` — transactions paginées du compte, triées par date décroissante : `{ data: [ { id, label, amount_cents, currency, status, booking_date, value_date } ], total }` ; `404 not_found` si le compte n'appartient pas au `sub`.
 
-Les catégories (S2) et budgets/agrégats (S3) réutiliseront ces mêmes primitives.
+Les catégories (S2) et budgets/agrégats (S3) réutilisent ces mêmes primitives.
+
+### Endpoints d'agrégats et budgets (Sprint 3)
+
+Tous filtrés par le `sub` du JWT (anti-IDOR). Les paramètres de mois attendent `YYYY-MM`.
+
+- `GET /v1/transactions` — transactions paginées du propriétaire, tous comptes confondus, avec filtres et tri : `account_id`, `category_id`, `from`/`to` (`YYYY-MM-DD`, `from` ≤ `to`), `type` (`credit`/`debit`), `sort` (`date`|`amount`, défaut `date`), `order` (`asc`|`desc`, défaut `desc`), `limit`/`offset`. Réponse `{ data: [ { id, label, amount_cents, currency, status, booking_date, value_date, category_id, categorization_source } ], total }`.
+- `GET /v1/balance` — solde consolidé de tous les comptes du propriétaire : `{ total_cents, accounts: [ { id, iban_masked, currency, balance } ] }`. Un compte sans solde connu compte pour `0`.
+- `GET /v1/budgets?mois=YYYY-MM` — budgets mensuels par catégorie : `{ data: [ { id, category_id, montant_cents, mois, created_at, updated_at } ], total }`.
+- `POST /v1/budgets` — crée ou met à jour le budget d'une catégorie pour un mois (`{ category_id, montant_cents, mois }`). `201` avec le budget ; `404 not_found` si la catégorie n'appartient pas au propriétaire.
+- `GET /v1/budgets/remaining?month=YYYY-MM` — reste à dépenser par catégorie budgétée : `{ month, categories: [ { category_id, category_name, kind, color, icon, montant_prevu_cents, depense_cents, reste_cents, depassement_cents, depasse } ] }`.
+- `GET /v1/expenses/by-category?month=YYYY-MM` — dépenses du mois réparties par catégorie (graphique home made côté front) : `{ month, total_cents, categories: [ { category_id, category_name, kind, color, icon, amount_cents } ] }`. Les transactions sans catégorie sont regroupées sous une ligne à champs `null`.
+- `GET /v1/forecast?month=YYYY-MM` — budget prévisionnel mensuel. `solde_previsionnel_cents = revenus_recurrents_cents − depenses_recurrentes_cents − budgets_cents`, avec le détail par catégorie et un flag `donnees_suffisantes` (`false` si aucune récurrence détectée) : `{ month, solde_previsionnel_cents, revenus_recurrents_cents, depenses_recurrentes_cents, budgets_cents, donnees_suffisantes, categories: [ { category_id, category, revenus_recurrents_cents, depenses_recurrentes_cents, budget_cents } ] }`. Le montant récurrent d'un marchand est sa dernière occurrence (marchand normalisé) ; le classement revenu/dépense suit le `kind` de la catégorie, avec repli sur le signe du montant pour les transactions non catégorisées.
 
 ## Moteur de catégorisation par règles (SCRUM-231/232/233)
 
@@ -74,12 +86,21 @@ Deux volets d'application :
 
 ## Tests d'intégration
 
-Les tests d'intégration nécessitent un PostgreSQL accessible via la variable `BUDGY_TEST_DATABASE_URL`, avec un rôle disposant du privilège `CREATEDB` : le harness (`tests/common/mod.rs`) crée une base jetable par exécution, y applique les migrations `0001` → `0012`, puis la détruit.
+Les tests d'intégration nécessitent un PostgreSQL accessible via la variable `BUDGY_TEST_DATABASE_URL`, avec un rôle disposant du privilège `CREATEDB` : le harness (`tests/common/mod.rs`) crée une base jetable par exécution, y applique les migrations `0001` → `0014`, puis la détruit.
 
 Sans cette variable, ou si la base est indisponible / le privilège `CREATEDB` manquant, les tests d'intégration **se skippent proprement** (message sur `stderr`, aucun panic).
 
 ## Décisions / Sécurité
 
+- **2026-07 (SCRUM-234)** : budgets mensuels par catégorie (`GET`/`POST /v1/budgets`), un montant prévu par couple catégorie/mois, upsert idempotent.
+- **2026-07 (SCRUM-235)** : reste à dépenser par catégorie budgétée (`GET /v1/budgets/remaining`), calcul domaine `montant_prevu − dépenses du mois` avec dépassement explicite.
+- **2026-07 (SCRUM-236)** : détection des récurrences ajoutée, marquage porté par la migration `0014_transaction_is_recurrent.sql`.
+- **2026-07 (SCRUM-238)** : solde consolidé tous comptes (`GET /v1/balance`), compte sans solde connu compté pour `0`.
+- **2026-07 (SCRUM-239)** : dépenses mensuelles par catégorie (`GET /v1/expenses/by-category`), agrégat servant le graphique home made du front (pas de dépendance de charting).
+- **2026-07 (SCRUM-240)** : liste transverse des transactions (`GET /v1/transactions`) avec filtres (`account_id`, `category_id`, `from`/`to`, `type`) et tri (`date`/`amount`, `asc`/`desc`), réutilisant les primitives de pagination.
+- **2026-07 (SCRUM-237)** : budget prévisionnel (`GET /v1/forecast`), `solde = revenus récurrents − dépenses récurrentes − budgets`. Récurrent = dernière occurrence par marchand normalisé ; classement revenu/dépense par `kind` de catégorie (repli sur le signe du montant si non catégorisée) ; flag `donnees_suffisantes` à `false` sans récurrence détectée.
+- **2026-07 (SEC-BUDGY-S3-01, SCRUM-350, dette ouverte)** : la vérification de signature de l'event `auth/user/deleted` reste à confirmer côté Budgy. Dette d'audit S3 ouverte, à traiter.
+- **2026-07 (SCRUM-351)** : convention de ports de l'écosystème à formaliser (Budgy sur `8183`) ; décision de convention tracée, alignement à finaliser avec le lead.
 - **2026-07-21 (SCRUM-233)** : moteur d'application des règles livré (nouvelles transactions + rétroactif à la création de règle). Le matching est **applicatif après déchiffrement** des libellés : les `label` sont chiffrés en base, un matching SQL est donc impossible.
 - **2026-07-21 (clôture S2)** : le classement des règles est porté par le domaine (`selectionner_regle`), indépendant de l'ordre de retour SQL. Les valeurs de `categorization_source` (`manual` / `rule` / `none`) ont une source unique : l'enum `CategorizationSource`.
 - **2026-07-21 (SEC-001, dette assumée)** : `budgy.regles_categorisation.label_pattern` reste stocké **en clair** alors que `bank_transaction.label` est chiffré (BYTEA). Décision cohérente avec SCRUM-232. L'audit sécu de clôture l'a classé **Medium** (PII potentielle, incohérent avec le chiffrement des labels de transaction). Chiffrement **reporté** à un sprint ultérieur ; hacher est exclu car casserait le matching par sous-chaîne. À réévaluer.
