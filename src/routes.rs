@@ -45,6 +45,10 @@ fn public_routes() -> Router<AppState> {
             "/categorization-rules",
             post(handlers::regles_categorisation::create_rule),
         )
+        .route(
+            "/budgets",
+            get(handlers::budgets::list_budgets).post(handlers::budgets::upsert_budget),
+        )
         .route("/banks", get(handlers::banques::list_banks))
         .route(
             "/consents",
