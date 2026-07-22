@@ -50,6 +50,10 @@ fn public_routes() -> Router<AppState> {
             "/budgets",
             get(handlers::budgets::list_budgets).post(handlers::budgets::upsert_budget),
         )
+        .route(
+            "/expenses/by-category",
+            get(handlers::depenses::expenses_by_category),
+        )
         .route("/banks", get(handlers::banques::list_banks))
         .route(
             "/consents",

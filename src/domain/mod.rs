@@ -4,6 +4,7 @@ pub mod budget;
 pub mod category;
 pub mod compte;
 pub mod consent;
+pub mod depense;
 pub mod effacement;
 pub mod horloge;
 pub mod ports;
