@@ -55,6 +55,39 @@ impl TransactionStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensTransaction {
+    Entree,
+    Sortie,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChampTriTransaction {
+    Date,
+    Montant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrdreTri {
+    Ascendant,
+    Descendant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TriTransactions {
+    pub champ: ChampTriTransaction,
+    pub ordre: OrdreTri,
+}
+
+impl Default for TriTransactions {
+    fn default() -> Self {
+        Self {
+            champ: ChampTriTransaction::Date,
+            ordre: OrdreTri::Descendant,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TransactionBancaire {
     pub id: TransactionBancaireId,
@@ -70,6 +103,20 @@ pub struct TransactionBancaire {
     pub categorization_source: CategorizationSource,
     pub rule_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+}
+
+impl TransactionBancaire {
+    pub fn sens(&self) -> SensTransaction {
+        if self.amount_cents < 0 {
+            SensTransaction::Sortie
+        } else {
+            SensTransaction::Entree
+        }
+    }
+
+    pub fn date_effective(&self) -> Option<NaiveDate> {
+        self.booking_date.or(self.value_date)
+    }
 }
 
 #[derive(Debug, Clone)]
