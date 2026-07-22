@@ -9,3 +9,4 @@ mod mapping;
 pub mod me;
 pub mod regles_categorisation;
 pub mod soldes;
+pub mod transactions;
