@@ -100,6 +100,11 @@ pub trait ComptesBancairesReadRepository: Send + Sync {
         compte: &BankAccountId,
     ) -> impl Future<Output = Result<Option<CompteAvecSolde>, LectureError>> + Send;
 
+    fn lister_soldes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<CompteAvecSolde>, LectureError>> + Send;
+
     fn appartient_au_proprietaire(
         &self,
         proprietaire: &ProprietaireId,

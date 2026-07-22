@@ -9,6 +9,7 @@ pub mod horloge;
 pub mod ports;
 pub mod recurrence;
 pub mod regle_categorisation;
+pub mod solde_consolide;
 pub mod synchro;
 pub mod transaction_bancaire;
 
@@ -28,6 +29,7 @@ pub use recurrence::{
 pub use regle_categorisation::{
     LabelPattern, NouvelleRegleCategorisation, RegleCategorisation, RegleCategorisationId,
 };
+pub use solde_consolide::SoldeConsolide;
 pub use transaction_bancaire::{
     CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
     TransactionStatus,

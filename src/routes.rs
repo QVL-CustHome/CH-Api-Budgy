@@ -19,6 +19,7 @@ fn operational_routes() -> Router<AppState> {
 fn public_routes() -> Router<AppState> {
     Router::new()
         .route("/me", get(handlers::me::me))
+        .route("/balance", get(handlers::soldes::get_consolidated_balance))
         .route("/accounts", get(handlers::comptes::list_accounts))
         .route(
             "/accounts/{account_id}",

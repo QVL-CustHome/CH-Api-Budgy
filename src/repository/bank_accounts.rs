@@ -207,6 +207,31 @@ impl SqlxBankAccountsRepository {
         Ok(Some(CompteAvecSolde { compte, solde }))
     }
 
+    pub async fn lister_soldes(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<CompteAvecSolde>, ChiffrementError> {
+        let rows = sqlx::query_as::<_, BankAccountRow>(
+            "SELECT id, owner_id, consent_id, external_account_id, iban_masked, currency, \
+             next_sync_at, sync_count_today, created_at, updated_at \
+             FROM budgy.bank_account WHERE owner_id = $1 \
+             ORDER BY created_at ASC",
+        )
+        .bind(&proprietaire.0)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut soldes = Vec::with_capacity(rows.len());
+        for row in rows {
+            let compte = into_bank_account(crypto, row)?;
+            let solde = self.solde_courant(crypto, &compte.id).await?;
+            soldes.push(CompteAvecSolde { compte, solde });
+        }
+
+        Ok(soldes)
+    }
+
     pub async fn appartient_au_proprietaire(
         &self,
         proprietaire: &ProprietaireId,
@@ -386,6 +411,16 @@ impl ComptesBancairesReadRepository for SqlxBankAccountsWriteAdapter {
     ) -> Result<Option<CompteAvecSolde>, LectureError> {
         self.repo
             .fetch_avec_solde(&self.crypto, proprietaire, compte)
+            .await
+            .map_err(|e| LectureError::Acces(e.to_string()))
+    }
+
+    async fn lister_soldes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<CompteAvecSolde>, LectureError> {
+        self.repo
+            .lister_soldes(&self.crypto, proprietaire)
             .await
             .map_err(|e| LectureError::Acces(e.to_string()))
     }
