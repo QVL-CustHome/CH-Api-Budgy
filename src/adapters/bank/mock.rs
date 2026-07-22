@@ -63,6 +63,8 @@ impl MockBankDataSource {
             category: None,
             categorization_source: CategorizationSource::None,
             rule_id: None,
+            is_recurrent: false,
+            recurrence_interval: None,
             created_at: cree_le,
         };
 
@@ -79,6 +81,8 @@ impl MockBankDataSource {
             category: None,
             categorization_source: CategorizationSource::None,
             rule_id: None,
+            is_recurrent: false,
+            recurrence_interval: None,
             created_at: cree_le,
         };
 
@@ -102,6 +106,8 @@ impl MockBankDataSource {
             category: None,
             categorization_source: CategorizationSource::None,
             rule_id: None,
+            is_recurrent: false,
+            recurrence_interval: None,
             created_at: cree_le,
         };
 
