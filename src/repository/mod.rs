@@ -5,4 +5,5 @@ pub mod budgets;
 pub mod categories;
 pub mod chiffrement;
 pub mod consents;
+pub mod depenses;
 pub mod regles_categorisation;

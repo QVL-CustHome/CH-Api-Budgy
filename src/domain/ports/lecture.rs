@@ -4,6 +4,7 @@ use crate::domain::budget::Budget;
 use crate::domain::category::Category;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
+use crate::domain::depense::{Mois, RepartitionDepenses};
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::TransactionBancaire;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -125,6 +126,14 @@ pub trait TransactionsBancairesReadRepository: Send + Sync {
         filtre: FiltreTransactions,
         tranche: Tranche,
     ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
+}
+
+pub trait DepensesReadRepository: Send + Sync {
+    fn repartition_mensuelle_par_categorie(
+        &self,
+        proprietaire: &ProprietaireId,
+        mois: Mois,
+    ) -> impl Future<Output = Result<RepartitionDepenses, LectureError>> + Send;
 }
 
 #[derive(Debug, Clone)]

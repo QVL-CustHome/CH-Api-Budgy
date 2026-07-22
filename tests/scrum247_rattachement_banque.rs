@@ -20,6 +20,7 @@ use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
+use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
@@ -147,6 +148,7 @@ fn state_avec_source(db: &DisposableDb, bank_source: Arc<dyn BankDataSource>) ->
         )),
         categories: Arc::new(SqlxCategoriesRepository::new(db.pool.clone())),
         budgets: Arc::new(SqlxBudgetsRepository::new(db.pool.clone())),
+        depenses: Arc::new(SqlxDepensesRepository::new(db.pool.clone(), crypto.clone())),
         regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.pool.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),

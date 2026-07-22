@@ -2,6 +2,7 @@ pub mod banques;
 pub mod budgets;
 pub mod categories;
 pub mod comptes;
+pub mod depenses;
 pub mod dto;
 pub mod health;
 mod mapping;
