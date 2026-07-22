@@ -20,6 +20,10 @@ fn public_routes() -> Router<AppState> {
     Router::new()
         .route("/me", get(handlers::me::me))
         .route("/balance", get(handlers::soldes::get_consolidated_balance))
+        .route(
+            "/transactions",
+            get(handlers::transactions::list_transactions),
+        )
         .route("/accounts", get(handlers::comptes::list_accounts))
         .route(
             "/accounts/{account_id}",
