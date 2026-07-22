@@ -15,7 +15,9 @@ use ch_api_budgy::domain::ports::ecriture::{
 use ch_api_budgy::domain::transaction_bancaire::{NouvelleTransactionBancaire, TransactionStatus};
 use ch_api_budgy::repository::bank_accounts::SqlxBankAccountsWriteAdapter;
 use ch_api_budgy::repository::bank_transactions::SqlxBankTransactionsWriteAdapter;
+use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
+use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
@@ -90,6 +92,8 @@ fn state(db: &DisposableDb, crypto: &Arc<CryptoService>) -> AppState {
             crypto.clone(),
         )),
         categories: Arc::new(SqlxCategoriesRepository::new(db.pool.clone())),
+        budgets: Arc::new(SqlxBudgetsRepository::new(db.pool.clone())),
+        depenses: Arc::new(SqlxDepensesRepository::new(db.pool.clone(), crypto.clone())),
         regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.pool.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.pool.clone(),

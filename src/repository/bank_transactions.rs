@@ -196,7 +196,8 @@ impl SqlxBankTransactionsRepository {
         let rows = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.created_at \
+             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE a.owner_id = $1 \
