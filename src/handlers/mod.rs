@@ -1,4 +1,5 @@
 pub mod banques;
+pub mod budgets;
 pub mod categories;
 pub mod comptes;
 pub mod dto;

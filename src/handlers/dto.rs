@@ -1,6 +1,7 @@
 use crate::api::money::Centimes;
 use crate::domain::balance::{Balance, BalanceType};
 use crate::domain::bank_account::BankAccount;
+use crate::domain::budget::Budget;
 use crate::domain::category::{Category, CategoryKind};
 use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
@@ -114,6 +115,41 @@ impl From<RegleCategorisation> for CategorizationRuleDto {
             category_id: regle.category_id.0,
             priority: regle.priority,
             created_at: regle.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpsertBudgetRequest {
+    pub category_id: Uuid,
+    pub montant_cents: i64,
+    pub mois: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BudgetQuery {
+    pub mois: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BudgetDto {
+    pub id: Uuid,
+    pub category_id: Uuid,
+    pub montant_cents: Centimes,
+    pub mois: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Budget> for BudgetDto {
+    fn from(budget: Budget) -> Self {
+        Self {
+            id: budget.id.0,
+            category_id: budget.category_id.0,
+            montant_cents: Centimes(budget.montant_prevu_cents),
+            mois: budget.mois.format("%Y-%m").to_string(),
+            created_at: budget.created_at,
+            updated_at: budget.updated_at,
         }
     }
 }
