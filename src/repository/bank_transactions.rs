@@ -33,6 +33,8 @@ const FIELD_LABEL: &str = "label";
 pub(crate) const FIELD_AMOUNT: &str = "amount_cents";
 const LIMITE_RETROACTIF: i64 = 5000;
 
+type LigneOccurrenceChiffree = (Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
+
 fn dedup_key_transaction(
     crypto: &CryptoService,
     bank_account: &BankAccountId,
@@ -413,16 +415,15 @@ impl SqlxBankTransactionsRepository {
         crypto: &CryptoService,
         proprietaire: &ProprietaireId,
     ) -> Result<Vec<OccurrenceTransaction>, ChiffrementError> {
-        let rows: Vec<(Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>)> =
-            sqlx::query_as(
-                "SELECT t.id, t.label, t.amount_cents, t.booking_date, t.value_date \
+        let rows: Vec<LigneOccurrenceChiffree> = sqlx::query_as(
+            "SELECT t.id, t.label, t.amount_cents, t.booking_date, t.value_date \
                  FROM budgy.bank_transaction t \
                  JOIN budgy.bank_account a ON a.id = t.bank_account_id \
                  WHERE a.owner_id = $1",
-            )
-            .bind(&proprietaire.0)
-            .fetch_all(&self.db)
-            .await?;
+        )
+        .bind(&proprietaire.0)
+        .fetch_all(&self.db)
+        .await?;
 
         let mut occurrences = Vec::with_capacity(rows.len());
         for (id, label_blob, amount_blob, booking_date, value_date) in rows {
