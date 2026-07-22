@@ -5,6 +5,7 @@ use crate::domain::category::{Category, CategoryId};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::depense::{Mois, RepartitionDepenses};
+use crate::domain::previsionnel::OccurrenceRecurrente;
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::{SensTransaction, TransactionBancaire, TriTransactions};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -143,6 +144,13 @@ pub trait TransactionsBancairesReadRepository: Send + Sync {
         tri: TriTransactions,
         tranche: Tranche,
     ) -> impl Future<Output = Result<LectureResultat<TransactionBancaire>, LectureError>> + Send;
+}
+
+pub trait RecurrentsReadRepository: Send + Sync {
+    fn lister_recurrents_pour_proprietaire(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> impl Future<Output = Result<Vec<OccurrenceRecurrente>, LectureError>> + Send;
 }
 
 pub trait DepensesReadRepository: Send + Sync {
