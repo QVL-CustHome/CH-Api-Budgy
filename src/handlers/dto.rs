@@ -6,6 +6,7 @@ use crate::domain::consent::{Consent, ConsentRenouvellement, ConsentStatus};
 use crate::domain::ports::bank_data_source::Etablissement;
 use crate::domain::ports::lecture::{CategorieAvecCompteur, CompteAvecSolde};
 use crate::domain::regle_categorisation::RegleCategorisation;
+use crate::domain::solde_consolide::SoldeConsolide;
 use crate::domain::transaction_bancaire::{
     CategorizationSource, TransactionBancaire, TransactionStatus,
 };
@@ -284,6 +285,45 @@ impl From<CompteAvecSolde> for BankAccountSummaryDto {
             iban_masked: item.compte.iban_masked,
             currency: item.compte.currency,
             balance: item.solde.map(BalanceDto::from),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConsolidatedAccountDto {
+    pub id: Uuid,
+    pub iban_masked: String,
+    pub currency: String,
+    pub balance: Centimes,
+}
+
+impl From<CompteAvecSolde> for ConsolidatedAccountDto {
+    fn from(item: CompteAvecSolde) -> Self {
+        let balance = item.solde.map(|solde| solde.amount_cents).unwrap_or(0);
+        Self {
+            id: item.compte.id.0,
+            iban_masked: item.compte.iban_masked,
+            currency: item.compte.currency,
+            balance: Centimes(balance),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConsolidatedBalanceDto {
+    pub total_cents: Centimes,
+    pub accounts: Vec<ConsolidatedAccountDto>,
+}
+
+impl From<SoldeConsolide> for ConsolidatedBalanceDto {
+    fn from(consolide: SoldeConsolide) -> Self {
+        Self {
+            total_cents: Centimes(consolide.total_cents),
+            accounts: consolide
+                .comptes
+                .into_iter()
+                .map(ConsolidatedAccountDto::from)
+                .collect(),
         }
     }
 }

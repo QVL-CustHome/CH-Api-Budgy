@@ -7,6 +7,7 @@ pub mod effacement;
 pub mod horloge;
 pub mod ports;
 pub mod regle_categorisation;
+pub mod solde_consolide;
 pub mod synchro;
 pub mod transaction_bancaire;
 
@@ -22,6 +23,7 @@ pub use ports::bank_data_source::{
 pub use regle_categorisation::{
     LabelPattern, NouvelleRegleCategorisation, RegleCategorisation, RegleCategorisationId,
 };
+pub use solde_consolide::SoldeConsolide;
 pub use transaction_bancaire::{
     CategorizationSource, NouvelleTransactionBancaire, TransactionBancaire, TransactionBancaireId,
     TransactionStatus,
