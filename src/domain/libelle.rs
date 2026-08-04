@@ -71,6 +71,20 @@ const MOIS: &[&str] = &[
     "DECEMBRE",
 ];
 
+/// Mots de « bruit » des références bancaires, sans valeur pour identifier le tiers.
+const BRUIT: &[&str] = &[
+    "REF",
+    "REFERENCE",
+    "MANDAT",
+    "MDT",
+    "RUM",
+    "ECH",
+    "NUM",
+    "NUMERO",
+    "MOTIF",
+    "ID",
+];
+
 /// Nombre maximum de mots conservés pour le tiers (motif court et général).
 const MAX_TOKENS: usize = 5;
 
@@ -98,12 +112,13 @@ fn normaliser(label: &str) -> String {
 
 fn retirer_prefixe(s: &str) -> &str {
     for prefixe in PREFIXES {
-        if let Some(reste) = s.strip_prefix(prefixe) {
-            if reste.is_empty() || reste.starts_with(' ') {
-                let reste = reste.trim_start();
-                // enlève un « DE » résiduel (ex. « VIREMENT RECU » puis « DE X »)
-                return reste.strip_prefix("DE ").unwrap_or(reste).trim_start();
-            }
+        let Some(reste) = s.strip_prefix(prefixe) else {
+            continue;
+        };
+        if reste.is_empty() || reste.starts_with(' ') {
+            let reste = reste.trim_start();
+            // enlève un « DE » résiduel (ex. « VIREMENT RECU » puis « DE X »)
+            return reste.strip_prefix("DE ").unwrap_or(reste).trim_start();
         }
     }
     s
@@ -129,7 +144,7 @@ fn est_token_volatile(token: &str) -> bool {
     if !token.is_empty() && token.chars().all(|c| c == 'X' || c == '*') {
         return true;
     }
-    MOIS.contains(&token)
+    MOIS.contains(&token) || BRUIT.contains(&token)
 }
 
 fn filtrer_tokens(s: &str) -> String {
