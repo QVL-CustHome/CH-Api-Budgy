@@ -7,6 +7,7 @@ pub mod consent;
 pub mod depense;
 pub mod effacement;
 pub mod horloge;
+pub mod libelle;
 pub mod ports;
 pub mod previsionnel;
 pub mod recurrence;

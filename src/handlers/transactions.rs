@@ -18,6 +18,26 @@ use crate::handlers::dto::BankTransactionDto;
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RecategorizeResult {
+    pub categorisees: u64,
+}
+
+/// Catégorise automatiquement en « Salaire » tous les crédits non catégorisés
+/// du propriétaire. Idempotent : ne touche que les transactions encore `none`.
+pub async fn recategoriser_credits(
+    user: BudgyUser,
+    State(state): State<AppState>,
+) -> Result<Json<RecategorizeResult>, ApiError> {
+    let proprietaire = ProprietaireId(user.owner_id().to_string());
+    let categorisees = state
+        .bank_transactions
+        .recategoriser_credits(&proprietaire)
+        .await?;
+    Ok(Json(RecategorizeResult { categorisees }))
+}
 
 pub async fn list_transactions(
     user: BudgyUser,

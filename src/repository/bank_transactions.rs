@@ -390,6 +390,115 @@ impl SqlxBankTransactionsRepository {
         Ok(owner)
     }
 
+    /// Catégorie « Salaire » (revenu) vers laquelle les crédits sont catégorisés par
+    /// défaut. Préfère celle du propriétaire, sinon la catégorie globale seedée.
+    pub async fn categorie_credit_par_defaut(
+        &self,
+        owner: &str,
+    ) -> Result<Option<Uuid>, ChiffrementError> {
+        let id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM budgy.category \
+             WHERE name = 'Salaire' AND kind = 'revenu' \
+             AND (coalesce(owner_id, '') = $1 OR coalesce(owner_id, '') = '') \
+             ORDER BY (coalesce(owner_id, '') = $1) DESC \
+             LIMIT 1",
+        )
+        .bind(owner)
+        .fetch_optional(&self.db)
+        .await?;
+        Ok(id)
+    }
+
+    /// Ids des transactions non catégorisées (source `none`) qui sont des crédits
+    /// (montant >= 0). Le montant étant chiffré, le filtre se fait après déchiffrement.
+    async fn lister_credits_non_categorises(
+        &self,
+        crypto: &CryptoService,
+        owner: &str,
+    ) -> Result<Vec<Uuid>, ChiffrementError> {
+        let rows: Vec<(Uuid, Vec<u8>)> = sqlx::query_as(
+            "SELECT t.id, t.amount_cents \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE a.owner_id = $1 AND t.categorization_source = 'none' \
+             LIMIT $2",
+        )
+        .bind(owner)
+        .bind(LIMITE_RETROACTIF)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut credits = Vec::new();
+        for (id, amount_blob) in rows {
+            let amount = dechiffrer_montant(crypto, owner, TABLE, FIELD_AMOUNT, &amount_blob)?;
+            if amount >= 0 {
+                credits.push(id);
+            }
+        }
+        Ok(credits)
+    }
+
+    /// Applique une catégorie par défaut (sans règle) à un lot de transactions,
+    /// uniquement celles encore non catégorisées (`none`) : n'écrase jamais un
+    /// choix manuel ni une règle de libellé.
+    async fn appliquer_categorie_defaut_par_lot(
+        &self,
+        owner: &str,
+        category: Uuid,
+        ids: &[Uuid],
+    ) -> Result<u64, ChiffrementError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let touchees = sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET category_id = $1, categorization_source = $2, rule_id = NULL \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id \
+             AND t.id = ANY($3) AND a.owner_id = $4 \
+             AND t.categorization_source = $5",
+        )
+        .bind(category)
+        .bind(CategorizationSource::Rule.as_str())
+        .bind(ids)
+        .bind(owner)
+        .bind(CategorizationSource::None.as_str())
+        .execute(&self.db)
+        .await?
+        .rows_affected();
+        Ok(touchees)
+    }
+
+    /// Libellé déchiffré d'une transaction, restreint au propriétaire + compte.
+    async fn libelle_transaction(
+        &self,
+        crypto: &CryptoService,
+        owner: &str,
+        account: &BankAccountId,
+        transaction: &TransactionBancaireId,
+    ) -> Result<Option<String>, ChiffrementError> {
+        let row: Option<Vec<u8>> = sqlx::query_scalar(
+            "SELECT t.label FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE t.id = $1 AND t.bank_account_id = $2 AND a.owner_id = $3",
+        )
+        .bind(transaction.0)
+        .bind(account.0)
+        .bind(owner)
+        .fetch_optional(&self.db)
+        .await?;
+        match row {
+            Some(label_blob) => Ok(Some(dechiffrer_texte(
+                crypto,
+                owner,
+                TABLE,
+                FIELD_LABEL,
+                &label_blob,
+            )?)),
+            None => Ok(None),
+        }
+    }
+
     pub async fn recalculer_recurrences(
         &self,
         crypto: &CryptoService,
@@ -578,6 +687,46 @@ impl SqlxBankTransactionsWriteAdapter {
 
         self.repo
             .appliquer_regle_par_lot(regle, &cibles)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    /// Catégorise en « Salaire » tous les crédits encore non catégorisés du
+    /// propriétaire (rattrapage / catégorisation automatique des revenus).
+    /// N'écrase jamais une catégorisation manuelle ou par règle.
+    pub async fn recategoriser_credits(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        let Some(category) = self
+            .repo
+            .categorie_credit_par_defaut(&proprietaire.0)
+            .await
+            .map_err(vers_ecriture_error)?
+        else {
+            return Ok(0);
+        };
+        let credits = self
+            .repo
+            .lister_credits_non_categorises(&self.crypto, &proprietaire.0)
+            .await
+            .map_err(vers_ecriture_error)?;
+        self.repo
+            .appliquer_categorie_defaut_par_lot(&proprietaire.0, category, &credits)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    /// Libellé déchiffré d'une transaction (propriétaire + compte), pour dériver
+    /// automatiquement le motif d'une règle.
+    pub async fn libelle_transaction(
+        &self,
+        proprietaire: &ProprietaireId,
+        compte: &BankAccountId,
+        transaction: &TransactionBancaireId,
+    ) -> Result<Option<String>, EcritureError> {
+        self.repo
+            .libelle_transaction(&self.crypto, &proprietaire.0, compte, transaction)
             .await
             .map_err(vers_ecriture_error)
     }

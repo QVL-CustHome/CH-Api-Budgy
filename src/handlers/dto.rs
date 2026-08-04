@@ -405,6 +405,8 @@ impl From<CategorizationSource> for CategorizationSourceDto {
 pub struct BankTransactionDto {
     pub id: Uuid,
     pub label: String,
+    /// Libellé nettoyé : préfixes bancaires, dates et références retirés (le « tiers »).
+    pub clean_label: String,
     pub amount_cents: Centimes,
     pub currency: String,
     pub status: TransactionStatusDto,
@@ -416,9 +418,11 @@ pub struct BankTransactionDto {
 
 impl From<TransactionBancaire> for BankTransactionDto {
     fn from(transaction: TransactionBancaire) -> Self {
+        let clean_label = crate::domain::libelle::extraire_tiers(&transaction.label);
         Self {
             id: transaction.id.0,
             label: transaction.label,
+            clean_label,
             amount_cents: Centimes(transaction.amount_cents),
             currency: transaction.currency,
             status: transaction.status.into(),

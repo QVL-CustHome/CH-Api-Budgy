@@ -24,6 +24,10 @@ fn public_routes() -> Router<AppState> {
             "/transactions",
             get(handlers::transactions::list_transactions),
         )
+        .route(
+            "/transactions/recategoriser",
+            post(handlers::transactions::recategoriser_credits),
+        )
         .route("/accounts", get(handlers::comptes::list_accounts))
         .route(
             "/accounts/{account_id}",
@@ -36,6 +40,10 @@ fn public_routes() -> Router<AppState> {
         .route(
             "/accounts/{account_id}/transactions/{transaction_id}/category",
             put(handlers::comptes::categorize_transaction),
+        )
+        .route(
+            "/accounts/{account_id}/transactions/{transaction_id}/rule",
+            post(handlers::regles_categorisation::create_rule_from_transaction),
         )
         .route(
             "/categories",
