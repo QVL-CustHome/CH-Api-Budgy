@@ -42,6 +42,21 @@ impl Mois {
         };
         NaiveDate::from_ymd_opt(annee, mois, 1).expect("premier jour du mois suivant valide")
     }
+
+    /// Mois calendaire précédent (sert à prédire un budget d'après le mois passé).
+    pub fn precedent(&self) -> Mois {
+        if self.mois == 1 {
+            Mois {
+                annee: self.annee - 1,
+                mois: 12,
+            }
+        } else {
+            Mois {
+                annee: self.annee,
+                mois: self.mois - 1,
+            }
+        }
+    }
 }
 
 impl fmt::Display for Mois {

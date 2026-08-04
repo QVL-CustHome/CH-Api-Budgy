@@ -34,6 +34,36 @@ pub fn calculer_reste_a_depenser(
     ResteADepenser { lignes }
 }
 
+/// Reste à dépenser **prédit** : à défaut de budget défini, on prend les dépenses
+/// du mois précédent par catégorie comme budget prévu, et on soustrait les dépenses
+/// du mois courant.
+pub fn calculer_reste_a_depenser_predit(
+    depenses_precedent: &RepartitionDepenses,
+    depenses_courant: &RepartitionDepenses,
+    categories: &HashMap<Uuid, Category>,
+) -> ResteADepenser {
+    let prevu = indexer_depenses(depenses_precedent);
+    let reel = indexer_depenses(depenses_courant);
+    let mut lignes: Vec<ResteCategorie> = prevu
+        .into_iter()
+        .filter(|(_, montant_prevu_cents)| *montant_prevu_cents > 0)
+        .map(|(category_id, montant_prevu_cents)| {
+            let depense_cents = reel.get(&category_id).copied().unwrap_or(0);
+            ResteCategorie {
+                category: categories.get(&category_id).cloned(),
+                category_id: CategoryId(category_id),
+                montant_prevu_cents,
+                depense_cents,
+                reste_cents: montant_prevu_cents - depense_cents,
+                depassement_cents: (depense_cents - montant_prevu_cents).max(0),
+                depasse: depense_cents > montant_prevu_cents,
+            }
+        })
+        .collect();
+    trier_par_reste_croissant(&mut lignes);
+    ResteADepenser { lignes }
+}
+
 fn indexer_depenses(depenses: &RepartitionDepenses) -> HashMap<Uuid, i64> {
     depenses
         .lignes

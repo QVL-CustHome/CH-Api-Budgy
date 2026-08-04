@@ -6,7 +6,9 @@ use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::BudgetsWriteRepository;
 use crate::domain::ports::lecture::{BudgetsReadRepository, DepensesReadRepository};
-use crate::domain::reste_a_depenser::calculer_reste_a_depenser;
+use crate::domain::reste_a_depenser::{
+    calculer_reste_a_depenser, calculer_reste_a_depenser_predit,
+};
 use crate::extract::BudgyUser;
 use crate::handlers::commun::{categories_par_id, parse_month};
 use crate::handlers::dto::{BudgetDto, BudgetQuery, RemainingBudgetDto, UpsertBudgetRequest};
@@ -81,6 +83,16 @@ pub async fn remaining_budgets(
         .await?;
     let categories = categories_par_id(&state, &proprietaire).await?;
 
-    let reste = calculer_reste_a_depenser(budgets, &depenses, &categories);
+    // Budgets définis -> calcul classique. Sinon, on PRÉDIT le budget de chaque
+    // catégorie à partir de ses dépenses du mois précédent.
+    let reste = if budgets.is_empty() {
+        let depenses_precedent = state
+            .depenses
+            .repartition_mensuelle_par_categorie(&proprietaire, mois.precedent())
+            .await?;
+        calculer_reste_a_depenser_predit(&depenses_precedent, &depenses, &categories)
+    } else {
+        calculer_reste_a_depenser(budgets, &depenses, &categories)
+    };
     Ok(Json(RemainingBudgetDto::depuis(mois, reste)))
 }
