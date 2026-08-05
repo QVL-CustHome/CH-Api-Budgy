@@ -345,16 +345,23 @@ pub struct ConsolidatedAccountDto {
     pub iban_masked: String,
     pub currency: String,
     pub balance: Centimes,
+    /// Solde à venir (opérations en attente incluses), quand la banque le fournit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub solde_a_venir_cents: Option<Centimes>,
 }
 
 impl From<CompteAvecSolde> for ConsolidatedAccountDto {
     fn from(item: CompteAvecSolde) -> Self {
         let balance = item.solde.map(|solde| solde.amount_cents).unwrap_or(0);
+        let solde_a_venir_cents = item
+            .solde_a_venir
+            .map(|solde| Centimes(solde.amount_cents));
         Self {
             id: item.compte.id.0,
             iban_masked: item.compte.iban_masked,
             currency: item.compte.currency,
             balance: Centimes(balance),
+            solde_a_venir_cents,
         }
     }
 }
@@ -362,6 +369,9 @@ impl From<CompteAvecSolde> for ConsolidatedAccountDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsolidatedBalanceDto {
     pub total_cents: Centimes,
+    /// Total à venir consolidé, présent seulement si au moins un compte l'expose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_a_venir_cents: Option<Centimes>,
     pub accounts: Vec<ConsolidatedAccountDto>,
 }
 
@@ -369,6 +379,7 @@ impl From<SoldeConsolide> for ConsolidatedBalanceDto {
     fn from(consolide: SoldeConsolide) -> Self {
         Self {
             total_cents: Centimes(consolide.total_cents),
+            total_a_venir_cents: consolide.total_a_venir_cents.map(Centimes),
             accounts: consolide
                 .comptes
                 .into_iter()

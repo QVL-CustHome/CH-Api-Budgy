@@ -174,7 +174,11 @@ impl SqlxBankAccountsRepository {
         for row in rows {
             let compte = into_bank_account(crypto, row)?;
             let solde = self.solde_courant(crypto, &compte.id).await?;
-            elements.push(CompteAvecSolde { compte, solde });
+            elements.push(CompteAvecSolde {
+                compte,
+                solde,
+                solde_a_venir: None,
+            });
         }
 
         Ok(LectureResultat {
@@ -204,7 +208,11 @@ impl SqlxBankAccountsRepository {
 
         let compte = into_bank_account(crypto, row)?;
         let solde = self.solde_courant(crypto, &compte.id).await?;
-        Ok(Some(CompteAvecSolde { compte, solde }))
+        Ok(Some(CompteAvecSolde {
+            compte,
+            solde,
+            solde_a_venir: None,
+        }))
     }
 
     pub async fn lister_soldes(
@@ -226,7 +234,12 @@ impl SqlxBankAccountsRepository {
         for row in rows {
             let compte = into_bank_account(crypto, row)?;
             let solde = self.solde_courant(crypto, &compte.id).await?;
-            soldes.push(CompteAvecSolde { compte, solde });
+            let solde_a_venir = self.solde_a_venir(crypto, &compte.id).await?;
+            soldes.push(CompteAvecSolde {
+                compte,
+                solde,
+                solde_a_venir,
+            });
         }
 
         Ok(soldes)
@@ -260,6 +273,32 @@ impl SqlxBankAccountsRepository {
              ORDER BY (b.balance_type = 'booked') DESC, \
              (b.balance_type = 'available') DESC, \
              b.reference_date DESC, b.created_at DESC \
+             LIMIT 1",
+        )
+        .bind(compte.0)
+        .fetch_optional(&self.db)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Some(into_balance(crypto, row)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Solde à venir (type `expected`) le plus récent d'un compte, s'il existe.
+    /// Toutes les banques ne l'exposent pas (ex. Crédit Agricole n'en fournit pas).
+    async fn solde_a_venir(
+        &self,
+        crypto: &CryptoService,
+        compte: &BankAccountId,
+    ) -> Result<Option<Balance>, ChiffrementError> {
+        let row = sqlx::query_as::<_, BalanceRow>(
+            "SELECT b.id, b.bank_account_id, a.owner_id, b.balance_type, b.amount_cents, \
+             b.currency, b.reference_date, b.created_at \
+             FROM budgy.balance b \
+             JOIN budgy.bank_account a ON a.id = b.bank_account_id \
+             WHERE b.bank_account_id = $1 AND b.balance_type = 'expected' \
+             ORDER BY b.reference_date DESC, b.created_at DESC \
              LIMIT 1",
         )
         .bind(compte.0)

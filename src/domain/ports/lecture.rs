@@ -87,6 +87,9 @@ pub trait BankAccountsReadRepository: Send + Sync {
 pub struct CompteAvecSolde {
     pub compte: BankAccount,
     pub solde: Option<Balance>,
+    /// Solde à venir (type `expected`) quand la banque le fournit — intègre les
+    /// opérations en attente. Absent pour les banques qui ne l'exposent pas.
+    pub solde_a_venir: Option<Balance>,
 }
 
 pub trait ComptesBancairesReadRepository: Send + Sync {
