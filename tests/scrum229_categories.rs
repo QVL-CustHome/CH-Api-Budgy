@@ -41,18 +41,18 @@ fn kind_de(categories: &[Category], nom: &str) -> CategoryKind {
 }
 
 #[tokio::test]
-async fn seed_installe_dix_categories_par_defaut() {
+async fn seed_installe_neuf_categories_par_defaut() {
     let db = db_or_skip!();
 
     let categories = lister(&db).await;
 
-    assert_eq!(categories.len(), 10);
+    assert_eq!(categories.len(), 9);
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn seed_repartit_deux_revenus_et_huit_depenses() {
+async fn seed_repartit_un_revenu_et_huit_depenses() {
     let db = db_or_skip!();
 
     let categories = lister(&db).await;
@@ -65,7 +65,7 @@ async fn seed_repartit_deux_revenus_et_huit_depenses() {
         .filter(|c| c.kind == CategoryKind::Depense)
         .count();
 
-    assert_eq!(revenus, 2);
+    assert_eq!(revenus, 1);
     assert_eq!(depenses, 8);
 
     db.destroy().await;

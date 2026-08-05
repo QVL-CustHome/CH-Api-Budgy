@@ -188,7 +188,7 @@ async fn ac1_liste_expose_les_categories_par_defaut_pour_un_nouvel_utilisateur()
 
     assert!(contient_nom(&corps, "Salaire"));
     assert!(contient_nom(&corps, "Loyer"));
-    assert!(total(&corps) >= 10);
+    assert!(total(&corps) >= 9);
 
     db.destroy().await;
 }

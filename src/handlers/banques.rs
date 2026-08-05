@@ -223,7 +223,7 @@ pub async fn list_consents(
         }
     }
     let mut consents: Vec<Consent> = par_etablissement.into_values().collect();
-    consents.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    consents.sort_by_key(|consent| std::cmp::Reverse(consent.updated_at));
 
     let total = consents.len() as u64;
     let maintenant = Utc::now();
