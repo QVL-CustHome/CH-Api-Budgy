@@ -319,11 +319,18 @@ async fn ca01_transaction_matchante_recoit_categorie_source_rule_et_rule_id() {
 }
 
 #[tokio::test]
-async fn ca01_pattern_en_debut_de_libelle_matche() {
+async fn ca01_pattern_matche_malgre_date_et_masque_carte() {
     let db = db_or_skip!();
 
-    let (categorie, regle, (category_id, source, rule_id)) =
-        categorisation_a_l_insert(&db, ALICE, "ACHAT", "ACHAT CARREFOUR MARKET").await;
+    // Le motif est le tiers nettoyé ; il doit matcher un libellé brut où une date
+    // et un masque de carte s'intercalent (format des paiements carte).
+    let (categorie, regle, (category_id, source, rule_id)) = categorisation_a_l_insert(
+        &db,
+        ALICE,
+        "CARTE INTERMARCHE",
+        "CARTE 07/07/26 INTERMARCHE CB*7513",
+    )
+    .await;
 
     assert_eq!(category_id, Some(as_uuid(&categorie)));
     assert_eq!(source, "rule");
@@ -409,7 +416,7 @@ async fn ca03_priorite_la_plus_haute_gagne() {
     let cat_basse = creer_categorie(&db, ALICE, "Priorité basse").await;
     let cat_haute = creer_categorie(&db, ALICE, "Priorité haute").await;
     creer_regle_ok(&db, ALICE, "CARREFOUR", &cat_basse, Some(1)).await;
-    let regle_haute = creer_regle_ok(&db, ALICE, "ACHAT", &cat_haute, Some(10)).await;
+    let regle_haute = creer_regle_ok(&db, ALICE, "MARKET", &cat_haute, Some(10)).await;
     let compte = semer_compte(&db, ALICE).await;
 
     let tx = inserer_transaction(&db, &compte, "ACHAT CARREFOUR MARKET").await;
@@ -427,7 +434,7 @@ async fn ca03_egalite_de_priorite_la_plus_recente_gagne() {
     let db = db_or_skip!();
     let cat_ancienne = creer_categorie(&db, ALICE, "Règle ancienne").await;
     let cat_recente = creer_categorie(&db, ALICE, "Règle récente").await;
-    creer_regle_ok(&db, ALICE, "ACHAT", &cat_ancienne, Some(5)).await;
+    creer_regle_ok(&db, ALICE, "MARKET", &cat_ancienne, Some(5)).await;
     let regle_recente = creer_regle_ok(&db, ALICE, "CARREFOUR", &cat_recente, Some(5)).await;
     let compte = semer_compte(&db, ALICE).await;
 
