@@ -8,7 +8,8 @@ use crate::domain::bank_account::BankAccountId;
 use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::lecture::{
-    FiltreTransactionsProprietaire, Tranche, TransactionsBancairesReadRepository,
+    FiltreTransactionsProprietaire, ReglesCategorisationReadRepository, Tranche,
+    TransactionsBancairesReadRepository,
 };
 use crate::domain::transaction_bancaire::{
     ChampTriTransaction, OrdreTri, SensTransaction, TriTransactions,
@@ -25,17 +26,35 @@ pub struct RecategorizeResult {
     pub categorisees: u64,
 }
 
-/// Catégorise automatiquement en « Salaire » tous les crédits non catégorisés
-/// du propriétaire. Idempotent : ne touche que les transactions encore `none`.
+/// Réconcilie la catégorisation des transactions encore non catégorisées du
+/// propriétaire, en deux temps : (1) ré-application de toutes les règles de
+/// libellé (rattrapage des transactions synchronisées avant qu'une règle existe,
+/// et des libellés désormais reconnus grâce au matching sur tiers) ; (2) mise en
+/// « Salaire » des crédits restants. Idempotent : ne touche que les `none`,
+/// n'écrase jamais un choix manuel ni une catégorisation par règle existante.
 pub async fn recategoriser_credits(
     user: BudgyUser,
     State(state): State<AppState>,
 ) -> Result<Json<RecategorizeResult>, ApiError> {
     let proprietaire = ProprietaireId(user.owner_id().to_string());
-    let categorisees = state
+
+    let regles = state
+        .regles_categorisation
+        .lister_pour_proprietaire(&proprietaire)
+        .await?;
+    let mut categorisees = 0u64;
+    for regle in &regles {
+        categorisees += state
+            .bank_transactions
+            .appliquer_regle_retroactif(regle)
+            .await?;
+    }
+
+    categorisees += state
         .bank_transactions
         .recategoriser_credits(&proprietaire)
         .await?;
+
     Ok(Json(RecategorizeResult { categorisees }))
 }
 

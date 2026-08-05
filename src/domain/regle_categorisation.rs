@@ -1,5 +1,6 @@
 use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
+use crate::domain::libelle::extraire_tiers;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -47,10 +48,16 @@ pub struct RegleCategorisation {
 }
 
 impl RegleCategorisation {
+    /// Vrai si le motif se retrouve dans le libellé, en comparant les **tiers**
+    /// extraits de part et d'autre (via [`extraire_tiers`]) et non les libellés
+    /// bruts. Sans ça, un motif dérivé du tiers (« CARTE INTERMARCHE ») ne
+    /// matcherait jamais son libellé brut (« CARTE 07/07/26 INTERMARCHE CB*7513 »),
+    /// où une date ou une référence s'intercale — le format variant de surcroît
+    /// d'une banque à l'autre.
     pub fn correspond(&self, label: &str) -> bool {
-        label
+        extraire_tiers(label)
             .to_lowercase()
-            .contains(&self.label_pattern.to_lowercase())
+            .contains(&extraire_tiers(&self.label_pattern).to_lowercase())
     }
 }
 
@@ -93,18 +100,24 @@ mod tests {
     }
 
     #[test]
-    fn correspond_en_debut_de_libelle() {
-        assert!(regle("achat", 0, instant(0)).correspond("achat carrefour market"));
+    fn correspond_malgre_date_et_masque_carte() {
+        // Le motif est le tiers nettoyé ; il doit matcher le libellé brut même
+        // quand une date et un masque de carte s'intercalent.
+        let regle = regle("CARTE INTERMARCHE", 0, instant(0));
+        assert!(regle.correspond("CARTE 07/07/26 INTERMARCHE CB*7513"));
     }
 
     #[test]
-    fn correspond_au_milieu_du_libelle() {
-        assert!(regle("carrefour", 0, instant(0)).correspond("achat carrefour market"));
+    fn correspond_independamment_de_la_date_et_de_la_reference() {
+        // Deux occurrences du même marchand, dates et masques différents.
+        let regle = regle("CARTE INTERMARCHE", 0, instant(0));
+        assert!(regle.correspond("CARTE 07/07/26 INTERMARCHE CB*7513"));
+        assert!(regle.correspond("CARTE 21/07/26 INTERMARCHE CB*9999"));
     }
 
     #[test]
-    fn correspond_en_fin_de_libelle() {
-        assert!(regle("market", 0, instant(0)).correspond("achat carrefour market"));
+    fn correspond_au_milieu_du_tiers() {
+        assert!(regle("carrefour", 0, instant(0)).correspond("ACHAT CARREFOUR MARKET"));
     }
 
     #[test]
@@ -113,28 +126,25 @@ mod tests {
     }
 
     #[test]
-    fn ne_correspond_pas_quand_le_motif_est_absent() {
-        assert!(!regle("amazon", 0, instant(0)).correspond("achat carrefour market"));
+    fn ne_correspond_pas_quand_le_marchand_est_absent() {
+        assert!(!regle("amazon", 0, instant(0)).correspond("CARTE 07/07/26 INTERMARCHE CB*7513"));
     }
 
     #[test]
-    fn selectionner_retourne_la_premiere_regle_correspondante() {
+    fn ne_correspond_pas_sur_le_seul_prefixe_operation() {
+        // « ACHAT » est un préfixe d'opération : retiré des deux côtés, il ne doit
+        // pas suffire à faire matcher n'importe quel achat.
+        assert!(!regle("achat", 0, instant(0)).correspond("ACHAT CARREFOUR MARKET"));
+    }
+
+    #[test]
+    fn selectionner_retourne_la_regle_correspondante_la_plus_prioritaire() {
         let regles = vec![
             regle("amazon", 10, instant(2)),
             regle("carrefour", 5, instant(1)),
             regle("market", 1, instant(0)),
         ];
-        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
-        assert_eq!(choisie.label_pattern, "carrefour");
-    }
-
-    #[test]
-    fn selectionner_respecte_l_ordre_pour_les_egalites() {
-        let regles = vec![
-            regle("carrefour", 5, instant(2)),
-            regle("carrefour market", 5, instant(1)),
-        ];
-        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
+        let choisie = selectionner_regle("ACHAT CARREFOUR MARKET", &regles).unwrap();
         assert_eq!(choisie.label_pattern, "carrefour");
     }
 
@@ -143,25 +153,27 @@ mod tests {
         let regles = vec![
             regle("carrefour", 1, instant(0)),
             regle("market", 3, instant(0)),
-            regle("achat", 10, instant(0)),
+            regle("carte", 10, instant(0)),
         ];
-        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
-        assert_eq!(choisie.label_pattern, "achat");
+        // Tiers du libellé = « CARTE CARREFOUR MARKET » : les trois motifs matchent.
+        let choisie =
+            selectionner_regle("CARTE 21/07/26 CARREFOUR MARKET CB*7513", &regles).unwrap();
+        assert_eq!(choisie.label_pattern, "carte");
     }
 
     #[test]
     fn selectionner_prend_la_plus_recente_a_priorite_egale_quel_que_soit_l_ordre() {
         let regles = vec![
-            regle("achat", 5, instant(1)),
+            regle("market", 5, instant(1)),
             regle("carrefour", 5, instant(10)),
         ];
-        let choisie = selectionner_regle("achat carrefour market", &regles).unwrap();
+        let choisie = selectionner_regle("ACHAT CARREFOUR MARKET", &regles).unwrap();
         assert_eq!(choisie.label_pattern, "carrefour");
     }
 
     #[test]
     fn selectionner_retourne_none_sans_correspondance() {
         let regles = vec![regle("amazon", 0, instant(0))];
-        assert!(selectionner_regle("achat carrefour market", &regles).is_none());
+        assert!(selectionner_regle("ACHAT CARREFOUR MARKET", &regles).is_none());
     }
 }
