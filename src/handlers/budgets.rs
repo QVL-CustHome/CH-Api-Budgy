@@ -81,18 +81,28 @@ pub async fn remaining_budgets(
         .depenses
         .repartition_mensuelle_par_categorie(&proprietaire, mois)
         .await?;
+    let depenses_precedent = state
+        .depenses
+        .repartition_mensuelle_par_categorie(&proprietaire, mois.precedent())
+        .await?;
     let categories = categories_par_id(&state, &proprietaire).await?;
 
     // Budgets définis -> calcul classique. Sinon, on PRÉDIT le budget de chaque
     // catégorie à partir de ses dépenses du mois précédent.
     let reste = if budgets.is_empty() {
-        let depenses_precedent = state
-            .depenses
-            .repartition_mensuelle_par_categorie(&proprietaire, mois.precedent())
-            .await?;
         calculer_reste_a_depenser_predit(&depenses_precedent, &depenses, &categories)
     } else {
         calculer_reste_a_depenser(budgets, &depenses, &categories)
     };
-    Ok(Json(RemainingBudgetDto::depuis(mois, reste)))
+
+    // Total global : dépenses du mois précédent (prévu) vs dépenses du mois
+    // courant (toutes, catégorisées ou non).
+    let total_prevu = depenses_precedent.total_cents;
+    let total_depense = depenses.total_cents;
+    Ok(Json(RemainingBudgetDto::depuis(
+        mois,
+        reste,
+        total_prevu,
+        total_depense,
+    )))
 }

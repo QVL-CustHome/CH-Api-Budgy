@@ -237,6 +237,8 @@ impl From<ConsentRenouvellement> for ConsentRenewalDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsentDto {
     pub consent_id: Uuid,
+    /// Nom de la banque (établissement), sans le suffixe pays. `None` si inconnu.
+    pub bank: Option<String>,
     pub status: ConsentStatusDto,
     pub renewal: ConsentRenewalDto,
     pub renewable: bool,
@@ -248,8 +250,17 @@ pub struct ConsentDto {
 impl ConsentDto {
     pub fn depuis(consent: Consent, maintenant: DateTime<Utc>, marge: Duration) -> Self {
         let renouvellement = consent.renouvellement(maintenant, marge);
+        let bank = consent.etablissement.as_ref().map(|etablissement| {
+            etablissement
+                .split('|')
+                .next()
+                .unwrap_or(etablissement)
+                .trim()
+                .to_string()
+        });
         Self {
             consent_id: consent.id.0,
+            bank,
             status: consent.status.into(),
             renewal: renouvellement.into(),
             renewable: !matches!(renouvellement, ConsentRenouvellement::AJour),
@@ -535,13 +546,28 @@ impl From<ResteCategorie> for CategoryRemainingDto {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct RemainingTotalDto {
+    pub montant_prevu_cents: Centimes,
+    pub depense_cents: Centimes,
+    pub reste_cents: Centimes,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct RemainingBudgetDto {
     pub month: String,
     pub categories: Vec<CategoryRemainingDto>,
+    /// Total global : dépenses du mois précédent (prévu) vs dépenses du mois
+    /// courant (toutes, catégorisées ou non).
+    pub total: RemainingTotalDto,
 }
 
 impl RemainingBudgetDto {
-    pub fn depuis(mois: Mois, reste: ResteADepenser) -> Self {
+    pub fn depuis(
+        mois: Mois,
+        reste: ResteADepenser,
+        total_prevu_cents: i64,
+        total_depense_cents: i64,
+    ) -> Self {
         Self {
             month: mois.to_string(),
             categories: reste
@@ -549,6 +575,11 @@ impl RemainingBudgetDto {
                 .into_iter()
                 .map(CategoryRemainingDto::from)
                 .collect(),
+            total: RemainingTotalDto {
+                montant_prevu_cents: Centimes(total_prevu_cents),
+                depense_cents: Centimes(total_depense_cents),
+                reste_cents: Centimes(total_prevu_cents - total_depense_cents),
+            },
         }
     }
 }

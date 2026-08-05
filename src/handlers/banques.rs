@@ -200,6 +200,31 @@ pub async fn list_consents(
         .consents
         .lister_par_proprietaire(&proprietaire)
         .await?;
+
+    // Un seul consentement par établissement : on garde la mise à jour la plus
+    // récente (les tentatives répétées sur la même banque sont fusionnées).
+    use std::collections::hash_map::Entry;
+    let mut par_etablissement: std::collections::HashMap<String, Consent> =
+        std::collections::HashMap::new();
+    for consent in consents {
+        let cle = consent
+            .etablissement
+            .clone()
+            .unwrap_or_else(|| consent.id.0.to_string());
+        match par_etablissement.entry(cle) {
+            Entry::Occupied(mut occupe) => {
+                if consent.updated_at > occupe.get().updated_at {
+                    occupe.insert(consent);
+                }
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(consent);
+            }
+        }
+    }
+    let mut consents: Vec<Consent> = par_etablissement.into_values().collect();
+    consents.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
     let total = consents.len() as u64;
     let maintenant = Utc::now();
     let data = consents
