@@ -353,9 +353,7 @@ pub struct ConsolidatedAccountDto {
 impl From<CompteAvecSolde> for ConsolidatedAccountDto {
     fn from(item: CompteAvecSolde) -> Self {
         let balance = item.solde.map(|solde| solde.amount_cents).unwrap_or(0);
-        let solde_a_venir_cents = item
-            .solde_a_venir
-            .map(|solde| Centimes(solde.amount_cents));
+        let solde_a_venir_cents = item.solde_a_venir.map(|solde| Centimes(solde.amount_cents));
         Self {
             id: item.compte.id.0,
             iban_masked: item.compte.iban_masked,
