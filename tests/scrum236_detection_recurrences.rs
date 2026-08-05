@@ -332,3 +332,50 @@ async fn ca02_labels_differents_ne_sont_pas_regroupes_en_recurrence() {
 
     fixture.detruire().await;
 }
+
+#[tokio::test]
+async fn ca01_salaire_a_libelle_variable_par_mois_reste_recurrent() {
+    // Le libellé du salaire varie chaque mois (mois + numéro de référence), mais le
+    // tiers stable « BLUE SOFT » doit permettre de regrouper les occurrences via
+    // extraire_tiers, sinon le salaire n'était jamais reconnu comme récurrent.
+    let fixture = fixture_or_skip!("owner-236-salaire-variable");
+
+    let avril = fixture
+        .inserer(
+            "sv1",
+            "VIREMENT EN VOTRE FAVEUR BLUE SOFT SALAIRE AVRIL 26 REF 111",
+            200_000,
+            jour(2026, 4, 15),
+        )
+        .await;
+    let mai = fixture
+        .inserer(
+            "sv2",
+            "VIREMENT EN VOTRE FAVEUR BLUE SOFT SALAIRE MAI 26 REF 222",
+            200_000,
+            jour(2026, 5, 15),
+        )
+        .await;
+    let juin = fixture
+        .inserer(
+            "sv3",
+            "VIREMENT EN VOTRE FAVEUR BLUE SOFT SALAIRE JUIN 26 REF 333",
+            200_000,
+            jour(2026, 6, 15),
+        )
+        .await;
+
+    let marquees = fixture.recalculer().await;
+    assert_eq!(
+        marquees, 3,
+        "des libellés variables mais un même tiers (BLUE SOFT) forment une récurrence"
+    );
+
+    for tx in [avril, mai, juin] {
+        let (recurrente, intervalle) = fixture.recurrence(tx).await;
+        assert!(recurrente, "le salaire mensuel doit être marqué récurrent");
+        assert_eq!(intervalle.as_deref(), Some("monthly"));
+    }
+
+    fixture.detruire().await;
+}

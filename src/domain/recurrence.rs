@@ -1,3 +1,4 @@
+use crate::domain::libelle::extraire_tiers;
 use crate::domain::transaction_bancaire::TransactionBancaireId;
 use chrono::NaiveDate;
 use std::collections::HashMap;
@@ -66,12 +67,14 @@ pub fn detecter_recurrences(occurrences: &[OccurrenceTransaction]) -> Vec<Transa
     recurrentes
 }
 
+/// Clé de regroupement d'un marchand pour la détection de récurrences.
+///
+/// S'appuie sur [`extraire_tiers`] (nettoyage des préfixes d'opération, dates, mois
+/// et références) plutôt que sur le libellé brut : un salaire ou un prélèvement dont
+/// le libellé varie chaque mois (date, numéro de référence) est ainsi reconnu comme
+/// le même marchand d'un mois sur l'autre, donc détectable comme récurrent.
 pub fn normaliser_marchand(label: &str) -> String {
-    label
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
+    extraire_tiers(label)
 }
 
 fn regrouper_par_montant<'a>(
