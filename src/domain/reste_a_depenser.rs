@@ -1,3 +1,4 @@
+use crate::domain::agregation::{indexer_par_categorie, medianes_par_categorie};
 use crate::domain::budget::Budget;
 use crate::domain::category::{Category, CategoryId};
 use crate::domain::depense::RepartitionDepenses;
@@ -25,7 +26,7 @@ pub fn calculer_reste_a_depenser(
     depenses: &RepartitionDepenses,
     categories: &HashMap<Uuid, Category>,
 ) -> ResteADepenser {
-    let depenses_par_categorie = indexer_depenses(depenses);
+    let depenses_par_categorie = indexer_par_categorie(depenses);
     let mut lignes: Vec<ResteCategorie> = budgets
         .into_iter()
         .map(|budget| ligne_pour_budget(budget, &depenses_par_categorie, categories))
@@ -44,27 +45,10 @@ pub fn calculer_reste_a_depenser_predit(
     depenses_courant: &RepartitionDepenses,
     categories: &HashMap<Uuid, Category>,
 ) -> ResteADepenser {
-    let reel = indexer_depenses(depenses_courant);
+    let reel = indexer_par_categorie(depenses_courant);
 
-    let mut montants_par_categorie: HashMap<Uuid, Vec<i64>> = HashMap::new();
-    for mois in historique {
-        for (category_id, montant_cents) in indexer_depenses(mois) {
-            montants_par_categorie
-                .entry(category_id)
-                .or_default()
-                .push(montant_cents);
-        }
-    }
-
-    let mut lignes: Vec<ResteCategorie> = montants_par_categorie
+    let mut lignes: Vec<ResteCategorie> = medianes_par_categorie(historique)
         .into_iter()
-        .map(|(category_id, mut montants)| {
-            // Un mois sans dépense dans la catégorie compte pour zéro : sinon une
-            // dépense unique passerait pour la norme.
-            montants.resize(historique.len(), 0);
-            (category_id, mediane(&mut montants))
-        })
-        .filter(|(_, montant_prevu_cents)| *montant_prevu_cents > 0)
         .map(|(category_id, montant_prevu_cents)| {
             let depense_cents = reel.get(&category_id).copied().unwrap_or(0);
             ResteCategorie {
@@ -80,34 +64,6 @@ pub fn calculer_reste_a_depenser_predit(
         .collect();
     trier_par_reste_croissant(&mut lignes);
     ResteADepenser { lignes }
-}
-
-/// Médiane d'une série de montants (moyenne des deux valeurs centrales si le
-/// nombre de valeurs est pair). Série vide -> 0.
-pub fn mediane(valeurs: &mut [i64]) -> i64 {
-    if valeurs.is_empty() {
-        return 0;
-    }
-    valeurs.sort_unstable();
-    let milieu = valeurs.len() / 2;
-    if valeurs.len().is_multiple_of(2) {
-        (valeurs[milieu - 1] + valeurs[milieu]) / 2
-    } else {
-        valeurs[milieu]
-    }
-}
-
-fn indexer_depenses(depenses: &RepartitionDepenses) -> HashMap<Uuid, i64> {
-    depenses
-        .lignes
-        .iter()
-        .filter_map(|ligne| {
-            ligne
-                .category
-                .as_ref()
-                .map(|category| (category.id.0, ligne.montant_cents))
-        })
-        .collect()
 }
 
 fn ligne_pour_budget(
@@ -266,12 +222,5 @@ mod tests {
         assert!(ligne.depasse);
         assert_eq!(ligne.reste_cents, -3_000);
         assert_eq!(ligne.depassement_cents, 3_000);
-    }
-
-    #[test]
-    fn mediane_serie_impaire_paire_et_vide() {
-        assert_eq!(mediane(&mut [10, 30, 20]), 20);
-        assert_eq!(mediane(&mut [10, 20, 30, 40]), 25);
-        assert_eq!(mediane(&mut []), 0);
     }
 }

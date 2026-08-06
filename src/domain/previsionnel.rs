@@ -39,12 +39,24 @@ struct AgregatCategorie {
     budget_cents: i64,
 }
 
+/// Assemble le prévisionnel du mois à partir de deux sources complémentaires :
+///
+/// - les **dépenses récurrentes**, issues de la détection d'occurrences à
+///   montant fixe (abonnements, loyer…) ;
+/// - les **revenus récurrents**, fournis catégorie par catégorie sous forme de
+///   médiane des mois passés. Un salaire varie de plusieurs dizaines d'euros
+///   d'un mois sur l'autre et change de libellé : la détection à montant fixe ne
+///   le reconnaît jamais, alors que la médiane le capte sans peine.
+///
+/// Les crédits sont donc volontairement ignorés côté récurrences, sous peine
+/// d'être comptés deux fois.
 pub fn calculer_previsionnel(
     recurrents: Vec<OccurrenceRecurrente>,
+    revenus_par_categorie: HashMap<Uuid, i64>,
     budgets: Vec<Budget>,
     categories: &HashMap<Uuid, Category>,
 ) -> Previsionnel {
-    let donnees_suffisantes = !recurrents.is_empty();
+    let donnees_suffisantes = !recurrents.is_empty() || !revenus_par_categorie.is_empty();
     let previsions_mensuelles = derniere_occurrence_par_marchand(recurrents);
 
     let mut agregats: HashMap<Option<Uuid>, AgregatCategorie> = HashMap::new();
@@ -53,13 +65,16 @@ pub fn calculer_previsionnel(
         let kind = cle
             .and_then(|id| categories.get(&id))
             .map(|category| category.kind);
-        let montant = prevision.amount_cents.abs();
-        let entree = agregats.entry(cle).or_default();
-        if est_depense(kind, prevision.amount_cents) {
-            entree.depenses_recurrentes_cents += montant;
-        } else {
-            entree.revenus_recurrents_cents += montant;
+        if !est_depense(kind, prevision.amount_cents) {
+            continue;
         }
+        agregats.entry(cle).or_default().depenses_recurrentes_cents += prevision.amount_cents.abs();
+    }
+    for (category_id, montant_cents) in revenus_par_categorie {
+        agregats
+            .entry(Some(category_id))
+            .or_default()
+            .revenus_recurrents_cents += montant_cents;
     }
     for budget in budgets {
         agregats

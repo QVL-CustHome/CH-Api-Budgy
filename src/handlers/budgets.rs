@@ -1,13 +1,14 @@
 use crate::api::error::ApiError;
 use crate::api::extractors::ApiQuery;
 use crate::api::response::ListResponse;
+use crate::domain::agregation::{MOIS_HISTORIQUE, mediane};
 use crate::domain::budget::{MoisBudget, MontantPrevu, NouveauBudget};
 use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::BudgetsWriteRepository;
 use crate::domain::ports::lecture::{BudgetsReadRepository, DepensesReadRepository};
 use crate::domain::reste_a_depenser::{
-    calculer_reste_a_depenser, calculer_reste_a_depenser_predit, mediane,
+    calculer_reste_a_depenser, calculer_reste_a_depenser_predit,
 };
 use crate::extract::BudgyUser;
 use crate::handlers::commun::{categories_par_id, parse_month};
@@ -17,9 +18,6 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
-
-/// Nombre de mois passés servant de base à la prédiction (médiane glissante).
-const MOIS_HISTORIQUE: usize = 3;
 
 pub async fn upsert_budget(
     user: BudgyUser,

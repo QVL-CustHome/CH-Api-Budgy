@@ -162,6 +162,16 @@ pub trait DepensesReadRepository: Send + Sync {
         proprietaire: &ProprietaireId,
         mois: Mois,
     ) -> impl Future<Output = Result<RepartitionDepenses, LectureError>> + Send;
+
+    /// Pendant du précédent côté crédits : les revenus du mois regroupés par
+    /// catégorie. Sert à prédire les revenus récurrents dont le montant varie
+    /// (un salaire, par exemple), que la détection de récurrence — calée sur des
+    /// montants fixes — ne sait pas reconnaître.
+    fn repartition_mensuelle_revenus_par_categorie(
+        &self,
+        proprietaire: &ProprietaireId,
+        mois: Mois,
+    ) -> impl Future<Output = Result<RepartitionDepenses, LectureError>> + Send;
 }
 
 #[derive(Debug, Clone)]

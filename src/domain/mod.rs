@@ -1,3 +1,4 @@
+pub mod agregation;
 pub mod balance;
 pub mod bank_account;
 pub mod budget;

@@ -11,6 +11,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Sens d'un mouvement retenu par l'agrégation mensuelle.
+#[derive(Debug, Clone, Copy)]
+enum Sens {
+    Debit,
+    Credit,
+}
+
+impl Sens {
+    fn retient(self, montant_cents: i64) -> bool {
+        match self {
+            Sens::Debit => montant_cents < 0,
+            Sens::Credit => montant_cents > 0,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SqlxDepensesRepository {
     db: Db,
@@ -22,10 +38,11 @@ impl SqlxDepensesRepository {
         Self { db, crypto }
     }
 
-    async fn montants_depenses_par_categorie(
+    async fn montants_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
         mois: Mois,
+        sens: Sens,
     ) -> Result<HashMap<Option<Uuid>, i64>, LectureError> {
         let rows: Vec<(Option<Uuid>, Vec<u8>)> = sqlx::query_as(
             "SELECT t.category_id, t.amount_cents \
@@ -53,7 +70,7 @@ impl SqlxDepensesRepository {
                 &amount_blob,
             )
             .map_err(|e| LectureError::Acces(e.to_string()))?;
-            if montant < 0 {
+            if sens.retient(montant) {
                 *totaux.entry(category_id).or_insert(0) += montant.abs();
             }
         }
@@ -81,16 +98,15 @@ impl SqlxDepensesRepository {
         }
         Ok(categories)
     }
-}
 
-impl DepensesReadRepository for SqlxDepensesRepository {
-    async fn repartition_mensuelle_par_categorie(
+    async fn repartition(
         &self,
         proprietaire: &ProprietaireId,
         mois: Mois,
+        sens: Sens,
     ) -> Result<RepartitionDepenses, LectureError> {
         let totaux = self
-            .montants_depenses_par_categorie(proprietaire, mois)
+            .montants_par_categorie(proprietaire, mois, sens)
             .await?;
         if totaux.is_empty() {
             return Ok(RepartitionDepenses {
@@ -116,6 +132,24 @@ impl DepensesReadRepository for SqlxDepensesRepository {
             total_cents,
             lignes,
         })
+    }
+}
+
+impl DepensesReadRepository for SqlxDepensesRepository {
+    async fn repartition_mensuelle_par_categorie(
+        &self,
+        proprietaire: &ProprietaireId,
+        mois: Mois,
+    ) -> Result<RepartitionDepenses, LectureError> {
+        self.repartition(proprietaire, mois, Sens::Debit).await
+    }
+
+    async fn repartition_mensuelle_revenus_par_categorie(
+        &self,
+        proprietaire: &ProprietaireId,
+        mois: Mois,
+    ) -> Result<RepartitionDepenses, LectureError> {
+        self.repartition(proprietaire, mois, Sens::Credit).await
     }
 }
 

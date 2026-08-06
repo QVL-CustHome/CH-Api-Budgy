@@ -505,6 +505,68 @@ async fn ca01_depenses_recurrentes_seules_donnent_un_solde_negatif() {
 }
 
 #[tokio::test]
+async fn un_salaire_a_montant_et_libelle_variables_est_pris_en_compte() {
+    // Cas réel : trois mois, trois libellés (le mois est collé au libellé) et
+    // trois montants distants de plusieurs dizaines d'euros. La détection de
+    // récurrence, calée sur des montants fixes, n'y voit rien ; la médiane des
+    // crédits par catégorie, si.
+    let db = db_or_skip!();
+    let compte = semer_compte(&db, ALICE).await;
+    let salaire = categorie_id_par_nom(&db, ALICE, "Salaire").await;
+
+    let avril = semer_transaction(
+        &db,
+        &compte,
+        "VIREMENT BLUE SOFT VIREMENT-SALAIRE-AVRIL-26",
+        121_788,
+        jour(2026, 4, 28),
+    )
+    .await;
+    let mai = semer_transaction(
+        &db,
+        &compte,
+        "VIREMENT BLUE SOFT VIREMENT-SALAIRE-MAI-26",
+        130_183,
+        jour(2026, 5, 29),
+    )
+    .await;
+    let juin = semer_transaction(
+        &db,
+        &compte,
+        "VIREMENT BLUE SOFT VIREMENT-SALAIRE-JUIN-26",
+        120_926,
+        jour(2026, 6, 30),
+    )
+    .await;
+    recalculer_recurrences(&db, ALICE).await;
+    for tx in [avril, mai, juin] {
+        categoriser(&db, ALICE, &compte, tx, &salaire).await;
+    }
+
+    let (status, corps) = forecast(&db, ALICE, MOIS_PREVU).await;
+
+    assert_eq!(status, StatusCode::OK, "{corps}");
+    assert_eq!(
+        corps["donnees_suffisantes"],
+        json!(true),
+        "un salaire variable doit suffire à établir un prévisionnel : {corps}"
+    );
+    assert_eq!(
+        entier(&corps, "revenus_recurrents_cents"),
+        121_788,
+        "médiane de 1217,88 / 1301,83 / 1209,26 : {corps}"
+    );
+    assert_eq!(entier(&corps, "depenses_recurrentes_cents"), 0, "{corps}");
+    assert_eq!(
+        entier(&corps, "solde_previsionnel_cents"),
+        121_788,
+        "{corps}"
+    );
+
+    db.destroy().await;
+}
+
+#[tokio::test]
 async fn ca02_detail_par_categorie_est_coherent_avec_les_totaux_de_tete() {
     let db = db_or_skip!();
     let compte = semer_compte(&db, ALICE).await;
