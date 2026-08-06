@@ -7,7 +7,7 @@ use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::ecriture::BudgetsWriteRepository;
 use crate::domain::ports::lecture::{BudgetsReadRepository, DepensesReadRepository};
 use crate::domain::reste_a_depenser::{
-    calculer_reste_a_depenser, calculer_reste_a_depenser_predit,
+    calculer_reste_a_depenser, calculer_reste_a_depenser_predit, mediane,
 };
 use crate::extract::BudgyUser;
 use crate::handlers::commun::{categories_par_id, parse_month};
@@ -17,6 +17,9 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
+
+/// Nombre de mois passés servant de base à la prédiction (médiane glissante).
+const MOIS_HISTORIQUE: usize = 3;
 
 pub async fn upsert_budget(
     user: BudgyUser,
@@ -81,23 +84,33 @@ pub async fn remaining_budgets(
         .depenses
         .repartition_mensuelle_par_categorie(&proprietaire, mois)
         .await?;
-    let depenses_precedent = state
-        .depenses
-        .repartition_mensuelle_par_categorie(&proprietaire, mois.precedent())
-        .await?;
+    // Historique glissant : on prédit sur la médiane de plusieurs mois plutôt
+    // que sur le seul mois précédent, pour lisser les dépenses exceptionnelles.
+    let mut historique = Vec::with_capacity(MOIS_HISTORIQUE);
+    let mut mois_precedent = mois;
+    for _ in 0..MOIS_HISTORIQUE {
+        mois_precedent = mois_precedent.precedent();
+        historique.push(
+            state
+                .depenses
+                .repartition_mensuelle_par_categorie(&proprietaire, mois_precedent)
+                .await?,
+        );
+    }
     let categories = categories_par_id(&state, &proprietaire).await?;
 
     // Budgets définis -> calcul classique. Sinon, on PRÉDIT le budget de chaque
-    // catégorie à partir de ses dépenses du mois précédent.
+    // catégorie à partir de la médiane de ses dépenses passées.
     let reste = if budgets.is_empty() {
-        calculer_reste_a_depenser_predit(&depenses_precedent, &depenses, &categories)
+        calculer_reste_a_depenser_predit(&historique, &depenses, &categories)
     } else {
         calculer_reste_a_depenser(budgets, &depenses, &categories)
     };
 
-    // Total global : dépenses du mois précédent (prévu) vs dépenses du mois
-    // courant (toutes, catégorisées ou non).
-    let total_prevu = depenses_precedent.total_cents;
+    // Total global : médiane des dépenses mensuelles passées (prévu) vs dépenses
+    // du mois courant (toutes, catégorisées ou non).
+    let mut totaux_passes: Vec<i64> = historique.iter().map(|mois| mois.total_cents).collect();
+    let total_prevu = mediane(&mut totaux_passes);
     let total_depense = depenses.total_cents;
     Ok(Json(RemainingBudgetDto::depuis(
         mois,

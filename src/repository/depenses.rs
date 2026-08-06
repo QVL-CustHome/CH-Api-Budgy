@@ -32,6 +32,7 @@ impl SqlxDepensesRepository {
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE a.owner_id = $1 \
+             AND NOT t.is_internal_transfer \
              AND COALESCE(t.booking_date, t.value_date) >= $2 \
              AND COALESCE(t.booking_date, t.value_date) < $3",
         )

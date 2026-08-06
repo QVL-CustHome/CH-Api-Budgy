@@ -19,6 +19,9 @@ use crate::domain::transaction_bancaire::{
     NouvelleTransactionBancaire, OrdreTri, SensTransaction, TransactionBancaire,
     TransactionBancaireId, TransactionStatus, TriTransactions,
 };
+use crate::domain::transfert_interne::{
+    CATEGORIE_VIREMENTS_INTERNES, MouvementCandidat, detecter_transferts_internes,
+};
 use crate::repository::chiffrement::{
     ChiffrementError, KEY_VERSION, chiffrer_montant, chiffrer_texte, dechiffrer_montant,
     dechiffrer_texte, vers_ecriture_error,
@@ -36,6 +39,7 @@ pub(crate) const FIELD_AMOUNT: &str = "amount_cents";
 const LIMITE_RETROACTIF: i64 = 5000;
 
 type LigneOccurrenceChiffree = (Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
+type LigneMouvementChiffree = (Uuid, Uuid, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
 type LigneRecurrenteChiffree = (
     Option<Uuid>,
     Vec<u8>,
@@ -250,9 +254,12 @@ impl SqlxBankTransactionsRepository {
             return Ok(CategorisationTransaction::CategorieIntrouvable);
         }
 
+        // Ranger la transaction dans « Virements internes » l'exclut des calculs ;
+        // l'en sortir la réintègre. C'est le pendant manuel de l'appariement auto.
         let mise_a_jour: Option<Uuid> = sqlx::query_scalar(
             "UPDATE budgy.bank_transaction AS t \
-             SET category_id = $1, categorization_source = $2, rule_id = NULL \
+             SET category_id = $1, categorization_source = $2, rule_id = NULL, \
+             is_internal_transfer = ($1 = $6) \
              FROM budgy.bank_account AS a \
              WHERE t.bank_account_id = a.id \
              AND t.id = $3 AND t.bank_account_id = $4 AND a.owner_id = $5 \
@@ -263,6 +270,7 @@ impl SqlxBankTransactionsRepository {
         .bind(transaction.0)
         .bind(compte.0)
         .bind(&proprietaire.0)
+        .bind(CATEGORIE_VIREMENTS_INTERNES)
         .fetch_optional(&self.db)
         .await?;
 
@@ -421,6 +429,7 @@ impl SqlxBankTransactionsRepository {
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE a.owner_id = $1 AND t.categorization_source = 'none' \
+             AND NOT t.is_internal_transfer \
              LIMIT $2",
         )
         .bind(owner)
@@ -528,6 +537,103 @@ impl SqlxBankTransactionsRepository {
         Ok(marquees)
     }
 
+    /// Réapparie les virements internes du propriétaire et met à jour le
+    /// marquage. Les transactions rangées manuellement dans la catégorie
+    /// « Virements internes » conservent leur marquage.
+    pub async fn recalculer_transferts_internes(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, ChiffrementError> {
+        let mouvements = self
+            .lister_mouvements_pour_appariement(crypto, proprietaire)
+            .await?;
+        let apparies: Vec<Uuid> = detecter_transferts_internes(&mouvements)
+            .into_iter()
+            .map(|id| id.0)
+            .collect();
+
+        self.reinitialiser_transferts_internes(proprietaire).await?;
+        self.marquer_transferts_internes(proprietaire, &apparies)
+            .await
+    }
+
+    async fn lister_mouvements_pour_appariement(
+        &self,
+        crypto: &CryptoService,
+        proprietaire: &ProprietaireId,
+    ) -> Result<Vec<MouvementCandidat>, ChiffrementError> {
+        let rows: Vec<LigneMouvementChiffree> = sqlx::query_as(
+            "SELECT t.id, t.bank_account_id, t.amount_cents, t.booking_date, t.value_date \
+             FROM budgy.bank_transaction t \
+             JOIN budgy.bank_account a ON a.id = t.bank_account_id \
+             WHERE a.owner_id = $1",
+        )
+        .bind(&proprietaire.0)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut mouvements = Vec::with_capacity(rows.len());
+        for (id, bank_account_id, amount_blob, booking_date, value_date) in rows {
+            let Some(date) = booking_date.or(value_date) else {
+                continue;
+            };
+            let amount_cents =
+                dechiffrer_montant(crypto, &proprietaire.0, TABLE, FIELD_AMOUNT, &amount_blob)?;
+            mouvements.push(MouvementCandidat {
+                id: TransactionBancaireId(id),
+                compte: BankAccountId(bank_account_id),
+                amount_cents,
+                date,
+            });
+        }
+        Ok(mouvements)
+    }
+
+    /// Efface le marquage automatique, en préservant les transactions rangées
+    /// manuellement dans la catégorie « Virements internes ».
+    async fn reinitialiser_transferts_internes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<(), ChiffrementError> {
+        sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET is_internal_transfer = false \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id AND a.owner_id = $1 \
+             AND t.is_internal_transfer \
+             AND t.category_id IS DISTINCT FROM $2",
+        )
+        .bind(&proprietaire.0)
+        .bind(CATEGORIE_VIREMENTS_INTERNES)
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    async fn marquer_transferts_internes(
+        &self,
+        proprietaire: &ProprietaireId,
+        ids: &[Uuid],
+    ) -> Result<u64, ChiffrementError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let marquees = sqlx::query(
+            "UPDATE budgy.bank_transaction AS t \
+             SET is_internal_transfer = true \
+             FROM budgy.bank_account AS a \
+             WHERE t.bank_account_id = a.id AND a.owner_id = $1 \
+             AND t.id = ANY($2) AND NOT t.is_internal_transfer",
+        )
+        .bind(&proprietaire.0)
+        .bind(ids)
+        .execute(&self.db)
+        .await?
+        .rows_affected();
+        Ok(marquees)
+    }
+
     async fn lister_occurrences_pour_detection(
         &self,
         crypto: &CryptoService,
@@ -537,7 +643,7 @@ impl SqlxBankTransactionsRepository {
             "SELECT t.id, t.label, t.amount_cents, t.booking_date, t.value_date \
                  FROM budgy.bank_transaction t \
                  JOIN budgy.bank_account a ON a.id = t.bank_account_id \
-                 WHERE a.owner_id = $1",
+                 WHERE a.owner_id = $1 AND NOT t.is_internal_transfer",
         )
         .bind(&proprietaire.0)
         .fetch_all(&self.db)
@@ -570,7 +676,8 @@ impl SqlxBankTransactionsRepository {
             "SELECT t.category_id, t.label, t.amount_cents, t.booking_date, t.value_date \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
-             WHERE a.owner_id = $1 AND t.is_recurrent = true",
+             WHERE a.owner_id = $1 AND t.is_recurrent = true \
+             AND NOT t.is_internal_transfer",
         )
         .bind(&proprietaire.0)
         .fetch_all(&self.db)
@@ -687,6 +794,19 @@ impl SqlxBankTransactionsWriteAdapter {
 
         self.repo
             .appliquer_regle_par_lot(regle, &cibles)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    /// Réapparie les virements internes (débit d'un compte ↔ crédit d'un autre)
+    /// pour les exclure des dépenses comme des revenus. Renvoie le nombre de
+    /// transactions nouvellement marquées.
+    pub async fn recalculer_transferts_internes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<u64, EcritureError> {
+        self.repo
+            .recalculer_transferts_internes(&self.crypto, proprietaire)
             .await
             .map_err(vers_ecriture_error)
     }

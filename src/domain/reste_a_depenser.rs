@@ -34,18 +34,36 @@ pub fn calculer_reste_a_depenser(
     ResteADepenser { lignes }
 }
 
-/// Reste à dépenser **prédit** : à défaut de budget défini, on prend les dépenses
-/// du mois précédent par catégorie comme budget prévu, et on soustrait les dépenses
-/// du mois courant.
+/// Reste à dépenser **prédit** : à défaut de budget défini, le budget prévu de
+/// chaque catégorie est la **médiane** de ses dépenses sur les mois d'historique
+/// fournis, et non le seul mois précédent. La médiane évite qu'une dépense
+/// exceptionnelle (un remboursement ponctuel, un gros achat) ne gonfle
+/// l'enveloppe du mois suivant comme si elle se reproduisait tous les mois.
 pub fn calculer_reste_a_depenser_predit(
-    depenses_precedent: &RepartitionDepenses,
+    historique: &[RepartitionDepenses],
     depenses_courant: &RepartitionDepenses,
     categories: &HashMap<Uuid, Category>,
 ) -> ResteADepenser {
-    let prevu = indexer_depenses(depenses_precedent);
     let reel = indexer_depenses(depenses_courant);
-    let mut lignes: Vec<ResteCategorie> = prevu
+
+    let mut montants_par_categorie: HashMap<Uuid, Vec<i64>> = HashMap::new();
+    for mois in historique {
+        for (category_id, montant_cents) in indexer_depenses(mois) {
+            montants_par_categorie
+                .entry(category_id)
+                .or_default()
+                .push(montant_cents);
+        }
+    }
+
+    let mut lignes: Vec<ResteCategorie> = montants_par_categorie
         .into_iter()
+        .map(|(category_id, mut montants)| {
+            // Un mois sans dépense dans la catégorie compte pour zéro : sinon une
+            // dépense unique passerait pour la norme.
+            montants.resize(historique.len(), 0);
+            (category_id, mediane(&mut montants))
+        })
         .filter(|(_, montant_prevu_cents)| *montant_prevu_cents > 0)
         .map(|(category_id, montant_prevu_cents)| {
             let depense_cents = reel.get(&category_id).copied().unwrap_or(0);
@@ -62,6 +80,21 @@ pub fn calculer_reste_a_depenser_predit(
         .collect();
     trier_par_reste_croissant(&mut lignes);
     ResteADepenser { lignes }
+}
+
+/// Médiane d'une série de montants (moyenne des deux valeurs centrales si le
+/// nombre de valeurs est pair). Série vide -> 0.
+pub fn mediane(valeurs: &mut [i64]) -> i64 {
+    if valeurs.is_empty() {
+        return 0;
+    }
+    valeurs.sort_unstable();
+    let milieu = valeurs.len() / 2;
+    if valeurs.len().is_multiple_of(2) {
+        (valeurs[milieu - 1] + valeurs[milieu]) / 2
+    } else {
+        valeurs[milieu]
+    }
 }
 
 fn indexer_depenses(depenses: &RepartitionDepenses) -> HashMap<Uuid, i64> {
@@ -112,4 +145,133 @@ fn nom_categorie(ligne: &ResteCategorie) -> &str {
         .as_ref()
         .map(|category| category.name.as_str())
         .unwrap_or("")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::category::CategoryKind;
+    use crate::domain::depense::LigneDepenseCategorie;
+    use chrono::Utc;
+
+    fn categorie(n: u128, nom: &str) -> Category {
+        Category {
+            id: CategoryId(Uuid::from_u128(n)),
+            owner_id: None,
+            name: nom.to_string(),
+            kind: CategoryKind::Depense,
+            color: "#546E7A".to_string(),
+            icon: "tag".to_string(),
+            created_at: Utc::now(),
+        }
+    }
+
+    fn mois(depenses: &[(&Category, i64)]) -> RepartitionDepenses {
+        RepartitionDepenses {
+            total_cents: depenses.iter().map(|(_, montant)| montant).sum(),
+            lignes: depenses
+                .iter()
+                .map(|(category, montant_cents)| LigneDepenseCategorie {
+                    category: Some((*category).clone()),
+                    montant_cents: *montant_cents,
+                })
+                .collect(),
+        }
+    }
+
+    fn index(categories: &[&Category]) -> HashMap<Uuid, Category> {
+        categories
+            .iter()
+            .map(|category| (category.id.0, (*category).clone()))
+            .collect()
+    }
+
+    fn ligne<'a>(reste: &'a ResteADepenser, nom: &str) -> Option<&'a ResteCategorie> {
+        reste
+            .lignes
+            .iter()
+            .find(|ligne| nom_categorie(ligne) == nom)
+    }
+
+    #[test]
+    fn une_depense_exceptionnelle_ne_devient_pas_une_enveloppe_mensuelle() {
+        let ponctuel = categorie(1, "Autres dépenses");
+        let historique = [
+            mois(&[(&ponctuel, 37_200)]), // une seule fois
+            mois(&[]),
+            mois(&[]),
+        ];
+
+        let reste = calculer_reste_a_depenser_predit(&historique, &mois(&[]), &index(&[&ponctuel]));
+
+        assert!(
+            ligne(&reste, "Autres dépenses").is_none(),
+            "la médiane de [37200, 0, 0] vaut 0 : pas d'enveloppe prévue"
+        );
+    }
+
+    #[test]
+    fn une_depense_recurrente_donne_une_enveloppe_egale_a_la_mediane() {
+        let factures = categorie(2, "Factures");
+        let historique = [
+            mois(&[(&factures, 29_983)]),
+            mois(&[(&factures, 20_000)]),
+            mois(&[(&factures, 25_000)]),
+        ];
+
+        let reste = calculer_reste_a_depenser_predit(&historique, &mois(&[]), &index(&[&factures]));
+
+        let ligne = ligne(&reste, "Factures").expect("catégorie prévue");
+        assert_eq!(ligne.montant_prevu_cents, 25_000, "médiane des trois mois");
+        assert_eq!(ligne.reste_cents, 25_000);
+    }
+
+    #[test]
+    fn les_depenses_du_mois_courant_sont_soustraites_de_l_enveloppe() {
+        let courses = categorie(3, "Courses");
+        let historique = [
+            mois(&[(&courses, 10_000)]),
+            mois(&[(&courses, 10_000)]),
+            mois(&[(&courses, 10_000)]),
+        ];
+
+        let reste = calculer_reste_a_depenser_predit(
+            &historique,
+            &mois(&[(&courses, 7_500)]),
+            &index(&[&courses]),
+        );
+
+        let ligne = ligne(&reste, "Courses").expect("catégorie prévue");
+        assert_eq!(ligne.depense_cents, 7_500);
+        assert_eq!(ligne.reste_cents, 2_500);
+        assert!(!ligne.depasse);
+    }
+
+    #[test]
+    fn un_depassement_est_signale() {
+        let loisirs = categorie(4, "Loisirs");
+        let historique = [
+            mois(&[(&loisirs, 5_000)]),
+            mois(&[(&loisirs, 5_000)]),
+            mois(&[(&loisirs, 5_000)]),
+        ];
+
+        let reste = calculer_reste_a_depenser_predit(
+            &historique,
+            &mois(&[(&loisirs, 8_000)]),
+            &index(&[&loisirs]),
+        );
+
+        let ligne = ligne(&reste, "Loisirs").expect("catégorie prévue");
+        assert!(ligne.depasse);
+        assert_eq!(ligne.reste_cents, -3_000);
+        assert_eq!(ligne.depassement_cents, 3_000);
+    }
+
+    #[test]
+    fn mediane_serie_impaire_paire_et_vide() {
+        assert_eq!(mediane(&mut [10, 30, 20]), 20);
+        assert_eq!(mediane(&mut [10, 20, 30, 40]), 25);
+        assert_eq!(mediane(&mut []), 0);
+    }
 }

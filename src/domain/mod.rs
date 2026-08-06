@@ -16,6 +16,7 @@ pub mod reste_a_depenser;
 pub mod solde_consolide;
 pub mod synchro;
 pub mod transaction_bancaire;
+pub mod transfert_interne;
 
 pub use balance::{Balance, BalanceId, BalanceType, NouvelleBalance};
 pub use bank_account::{BankAccount, BankAccountId, NouveauBankAccount};

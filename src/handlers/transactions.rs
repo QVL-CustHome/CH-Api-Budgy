@@ -27,9 +27,11 @@ pub struct RecategorizeResult {
 }
 
 /// Réconcilie la catégorisation des transactions encore non catégorisées du
-/// propriétaire, en deux temps : (1) ré-application de toutes les règles de
-/// libellé (rattrapage des transactions synchronisées avant qu'une règle existe,
-/// et des libellés désormais reconnus grâce au matching sur tiers) ; (2) mise en
+/// propriétaire, en trois temps : (0) appariement des virements internes, pour
+/// qu'un simple mouvement entre ses comptes ne soit pris ni pour une dépense ni
+/// pour un revenu ; (1) ré-application de toutes les règles de libellé
+/// (rattrapage des transactions synchronisées avant qu'une règle existe, et des
+/// libellés désormais reconnus grâce au matching sur tiers) ; (2) mise en
 /// « Salaire » des crédits restants. Idempotent : ne touche que les `none`,
 /// n'écrase jamais un choix manuel ni une catégorisation par règle existante.
 pub async fn recategoriser_credits(
@@ -37,6 +39,11 @@ pub async fn recategoriser_credits(
     State(state): State<AppState>,
 ) -> Result<Json<RecategorizeResult>, ApiError> {
     let proprietaire = ProprietaireId(user.owner_id().to_string());
+
+    state
+        .bank_transactions
+        .recalculer_transferts_internes(&proprietaire)
+        .await?;
 
     let regles = state
         .regles_categorisation
