@@ -567,6 +567,45 @@ async fn un_salaire_a_montant_et_libelle_variables_est_pris_en_compte() {
 }
 
 #[tokio::test]
+async fn un_credit_range_dans_une_categorie_de_depense_n_est_pas_un_revenu() {
+    // Un remboursement encaissé chaque mois et rangé dans « Courses » ne doit
+    // pas gonfler les revenus prévisionnels : seules les catégories de revenu
+    // comptent.
+    let db = db_or_skip!();
+    let compte = semer_compte(&db, ALICE).await;
+    let courses = categorie_id_par_nom(&db, ALICE, "Courses").await;
+    let salaire = categorie_id_par_nom(&db, ALICE, "Salaire").await;
+
+    for mois in [4u32, 5, 6] {
+        let remboursement = semer_transaction(
+            &db,
+            &compte,
+            "REMBOURSEMENT COURSES",
+            5_000,
+            jour(2026, mois, 10),
+        )
+        .await;
+        categoriser(&db, ALICE, &compte, remboursement, &courses).await;
+    }
+    let revenus = semer_revenu_recurrent(&db, &compte, 200_000).await;
+    recalculer_recurrences(&db, ALICE).await;
+    for tx in revenus {
+        categoriser(&db, ALICE, &compte, tx, &salaire).await;
+    }
+
+    let (status, corps) = forecast(&db, ALICE, MOIS_PREVU).await;
+
+    assert_eq!(status, StatusCode::OK, "{corps}");
+    assert_eq!(
+        entier(&corps, "revenus_recurrents_cents"),
+        200_000,
+        "seul le salaire doit compter comme revenu : {corps}"
+    );
+
+    db.destroy().await;
+}
+
+#[tokio::test]
 async fn ca02_detail_par_categorie_est_coherent_avec_les_totaux_de_tete() {
     let db = db_or_skip!();
     let compte = semer_compte(&db, ALICE).await;

@@ -1,6 +1,7 @@
 use crate::api::error::ApiError;
 use crate::api::extractors::ApiQuery;
 use crate::domain::agregation::{MOIS_HISTORIQUE, medianes_par_categorie};
+use crate::domain::category::CategoryKind;
 use crate::domain::compte::ProprietaireId;
 use crate::domain::ports::lecture::{
     BudgetsReadRepository, DepensesReadRepository, RecurrentsReadRepository,
@@ -49,9 +50,18 @@ pub async fn get_forecast(
                 .await?,
         );
     }
-    let revenus_par_categorie = medianes_par_categorie(&historique_revenus);
-
     let categories = categories_par_id(&state, &proprietaire).await?;
+
+    // Seules les catégories de revenu comptent : un crédit rangé dans une
+    // catégorie de dépense est un remboursement, pas une rentrée d'argent.
+    let revenus_par_categorie = medianes_par_categorie(&historique_revenus)
+        .into_iter()
+        .filter(|(category_id, _)| {
+            categories
+                .get(category_id)
+                .is_some_and(|category| category.kind == CategoryKind::Revenu)
+        })
+        .collect();
 
     let previsionnel =
         calculer_previsionnel(recurrents, revenus_par_categorie, budgets, &categories);
