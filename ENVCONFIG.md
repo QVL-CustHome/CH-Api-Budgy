@@ -39,6 +39,27 @@ Deux familles de variables :
 | `DATABASE_URL` | **oui** | **oui** | -- | URI PostgreSQL `postgres://user:pass@host:port/db` | Connexion a la base PostgreSQL du service (base `custhome_budgy`, port `5432`). |
 | `BUDGY_ENCRYPTION_KEY` | **oui** | **oui** | -- | base64 standard decodant vers **exactement 32 octets** | Cle de chiffrement des donnees sensibles du service (credentials bancaires chiffres au repos). |
 
+### Worker de synchronisation bancaire
+
+Surcharges de la section `worker_synchro` de `config.toml`. Le worker rafraichit periodiquement comptes, soldes et transactions, puis relance la detection de recurrences.
+
+| Variable | Obligatoire | Sensible | Defaut | Format | Description |
+|----------|:-----------:|:--------:|--------|--------|-------------|
+| `WORKER_SYNCHRO_ENABLED` | non | non | `false` | `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off` | Active le worker. **`true` en production.** |
+| `WORKER_SYNCHRO_INTERVAL_SECONDES` | non | non | `21600` (6 h) | entier | Intervalle entre deux cycles. Le **premier cycle part immediatement au demarrage** : un `systemctl restart` declenche donc une synchro. |
+| `WORKER_SYNCHRO_QUOTA_JOURNALIER` | non | non | `4` | entier | Synchronisations maximum par jour et par compte. |
+| `WORKER_SYNCHRO_FENETRE_JOURS` | non | non | `30` | entier | Profondeur d'historique demandee a la banque (`date_from = reference - fenetre`). **`88` en production.** |
+
+**Plafond Enable Banking : 90 jours.** Au-dela, l'API repond `422 WRONG_TRANSACTIONS_PERIOD` et la synchro echoue sans rien inserer -- et elle refuse deja 90 pile, d'ou `88`. L'historique s'accumule ensuite en base : la fenetre ne limite que ce qui est *redemande* a chaque cycle, pas ce qui est conserve.
+
+**Forcer une resynchronisation** : remettre les comptes echeants puis redemarrer.
+
+```bash
+sudo -u postgres psql -d custhome_budgy \
+  -c "UPDATE budgy.bank_account SET next_sync_at = NULL, sync_count_today = 0;"
+sudo systemctl restart ch-api-budgy
+```
+
 ### Secret a venir (US-04, non encore consomme)
 
 | Variable | Obligatoire | Sensible | Defaut | Format | Description |
@@ -49,7 +70,7 @@ Deux familles de variables :
 
 | Variable | Obligatoire | Sensible | Defaut | Format | Description |
 |----------|:-----------:|:--------:|--------|--------|-------------|
-| `BUDGY_TEST_DATABASE_URL` | non (tests) | oui | -- | URI PostgreSQL d'administration | Base d'administration pour les tests d'integration. Le role doit avoir le privilege `CREATEDB` : le harness cree une base jetable par execution, applique les migrations `0001` -> `0014`, puis la detruit. Absente ou base indisponible -> les tests d'integration **se skippent proprement** (pas de panic). Non lue par le runtime. |
+| `BUDGY_TEST_DATABASE_URL` | non (tests) | oui | -- | URI PostgreSQL d'administration | Base d'administration pour les tests d'integration. Le role doit avoir le privilege `CREATEDB` : le harness cree une base jetable par execution, applique les migrations `0001` -> `0016`, puis la detruit. Absente ou base indisponible -> les tests d'integration **se skippent proprement** (pas de panic). Non lue par le runtime. |
 
 ---
 
