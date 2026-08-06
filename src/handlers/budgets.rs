@@ -1,7 +1,7 @@
 use crate::api::error::ApiError;
 use crate::api::extractors::ApiQuery;
 use crate::api::response::ListResponse;
-use crate::domain::agregation::{MOIS_HISTORIQUE, mediane};
+use crate::domain::agregation::MOIS_HISTORIQUE;
 use crate::domain::budget::{MoisBudget, MontantPrevu, NouveauBudget};
 use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
@@ -105,11 +105,15 @@ pub async fn remaining_budgets(
         calculer_reste_a_depenser(budgets, &depenses, &categories)
     };
 
-    // Total global : médiane des dépenses mensuelles passées (prévu) vs dépenses
-    // du mois courant (toutes, catégorisées ou non).
-    let mut totaux_passes: Vec<i64> = historique.iter().map(|mois| mois.total_cents).collect();
-    let total_prevu = mediane(&mut totaux_passes);
-    let total_depense = depenses.total_cents;
+    // Total global : exactement la somme des lignes affichées. Y ajouter les
+    // dépenses non catégorisées gonflerait un total que le détail ne permet pas
+    // de recouper — une enveloppe ne vaut que pour ce qu'on sait rattacher.
+    let total_prevu: i64 = reste
+        .lignes
+        .iter()
+        .map(|ligne| ligne.montant_prevu_cents)
+        .sum();
+    let total_depense: i64 = reste.lignes.iter().map(|ligne| ligne.depense_cents).sum();
     Ok(Json(RemainingBudgetDto::depuis(
         mois,
         reste,
