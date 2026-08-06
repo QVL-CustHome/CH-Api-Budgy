@@ -320,6 +320,7 @@ impl SqlxBankTransactionsRepository {
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE a.owner_id = $1 AND t.category_id IS NULL \
+             AND NOT t.is_internal_transfer \
              LIMIT $2",
         )
         .bind(&proprietaire.0)
@@ -619,9 +620,18 @@ impl SqlxBankTransactionsRepository {
         if ids.is_empty() {
             return Ok(0);
         }
+        // Le marquage retire aussi la catégorisation **automatique** héritée (un
+        // virement pris pour un salaire, par exemple) : elle serait trompeuse à
+        // l'affichage. Un choix manuel de l'utilisateur, lui, est conservé.
         let marquees = sqlx::query(
             "UPDATE budgy.bank_transaction AS t \
-             SET is_internal_transfer = true \
+             SET is_internal_transfer = true, \
+             category_id = CASE WHEN t.categorization_source = 'manual' \
+             THEN t.category_id ELSE NULL END, \
+             rule_id = CASE WHEN t.categorization_source = 'manual' \
+             THEN t.rule_id ELSE NULL END, \
+             categorization_source = CASE WHEN t.categorization_source = 'manual' \
+             THEN t.categorization_source ELSE 'none' END \
              FROM budgy.bank_account AS a \
              WHERE t.bank_account_id = a.id AND a.owner_id = $1 \
              AND t.id = ANY($2) AND NOT t.is_internal_transfer",
