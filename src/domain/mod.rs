@@ -37,7 +37,8 @@ pub use ports::bank_data_source::{
     BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,
 };
 pub use previsionnel::{
-    LignePrevisionCategorie, OccurrenceRecurrente, Previsionnel, calculer_previsionnel,
+    LignePrevisionCategorie, Previsionnel, PrevisionsParCategorie, calculer_previsionnel,
+    categories_de_revenu,
 };
 pub use recurrence::{
     OccurrenceTransaction, RecurrenceInterval, TransactionRecurrente, detecter_recurrences,

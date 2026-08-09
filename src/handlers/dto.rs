@@ -599,9 +599,12 @@ impl RemainingBudgetDto {
 pub struct ForecastCategoryDto {
     pub category_id: Option<Uuid>,
     pub category: Option<String>,
-    pub revenus_recurrents_cents: Centimes,
-    pub depenses_recurrentes_cents: Centimes,
-    pub budget_cents: Centimes,
+    /// Attendu sur le cycle entier.
+    pub prevu_cents: Centimes,
+    /// Deja constate depuis le debut du cycle.
+    pub realise_cents: Centimes,
+    /// Ce qui reste a venir d'ici la fin du cycle.
+    pub restant_cents: Centimes,
 }
 
 impl From<LignePrevisionCategorie> for ForecastCategoryDto {
@@ -609,9 +612,9 @@ impl From<LignePrevisionCategorie> for ForecastCategoryDto {
         Self {
             category_id: ligne.category_id.map(|id| id.0),
             category: ligne.category.map(|category| category.name),
-            revenus_recurrents_cents: Centimes(ligne.revenus_recurrents_cents),
-            depenses_recurrentes_cents: Centimes(ligne.depenses_recurrentes_cents),
-            budget_cents: Centimes(ligne.budget_cents),
+            prevu_cents: Centimes(ligne.prevu_cents),
+            realise_cents: Centimes(ligne.realise_cents),
+            restant_cents: Centimes(ligne.restant_cents),
         }
     }
 }
@@ -620,9 +623,9 @@ impl From<LignePrevisionCategorie> for ForecastCategoryDto {
 pub struct ForecastDto {
     pub month: String,
     pub solde_previsionnel_cents: Centimes,
-    pub revenus_recurrents_cents: Centimes,
-    pub depenses_recurrentes_cents: Centimes,
-    pub budgets_cents: Centimes,
+    pub solde_actuel_cents: Centimes,
+    pub revenus_restants_cents: Centimes,
+    pub depenses_restantes_cents: Centimes,
     pub donnees_suffisantes: bool,
     pub categories: Vec<ForecastCategoryDto>,
 }
@@ -632,9 +635,9 @@ impl ForecastDto {
         Self {
             month: mois.to_string(),
             solde_previsionnel_cents: Centimes(previsionnel.solde_previsionnel_cents),
-            revenus_recurrents_cents: Centimes(previsionnel.revenus_recurrents_cents),
-            depenses_recurrentes_cents: Centimes(previsionnel.depenses_recurrentes_cents),
-            budgets_cents: Centimes(previsionnel.budgets_cents),
+            solde_actuel_cents: Centimes(previsionnel.solde_actuel_cents),
+            revenus_restants_cents: Centimes(previsionnel.revenus_restants_cents),
+            depenses_restantes_cents: Centimes(previsionnel.depenses_restantes_cents),
             donnees_suffisantes: previsionnel.donnees_suffisantes,
             categories: previsionnel
                 .lignes

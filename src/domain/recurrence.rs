@@ -1,3 +1,14 @@
+use crate::domain::category::CategoryId;
+
+/// Une échéance repérée par la détection de récurrence (montant fixe répété).
+#[derive(Debug, Clone)]
+pub struct OccurrenceRecurrente {
+    pub category_id: Option<CategoryId>,
+    pub label: String,
+    pub amount_cents: i64,
+    pub date: chrono::NaiveDate,
+}
+
 use crate::domain::libelle::extraire_tiers;
 use crate::domain::transaction_bancaire::TransactionBancaireId;
 use chrono::NaiveDate;

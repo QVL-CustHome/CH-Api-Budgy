@@ -6,7 +6,7 @@ use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
 use crate::domain::cycle::CycleMensuel;
 use crate::domain::depense::RepartitionDepenses;
-use crate::domain::previsionnel::OccurrenceRecurrente;
+use crate::domain::recurrence::OccurrenceRecurrente;
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::{SensTransaction, TransactionBancaire, TriTransactions};
 use chrono::{DateTime, NaiveDate, Utc};

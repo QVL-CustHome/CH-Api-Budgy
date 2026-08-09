@@ -11,7 +11,7 @@ use crate::domain::ports::lecture::{
     RecurrentsReadRepository, ReglesCategorisationReadRepository, Tranche,
     TransactionsBancairesReadRepository,
 };
-use crate::domain::previsionnel::OccurrenceRecurrente;
+use crate::domain::recurrence::OccurrenceRecurrente;
 use crate::domain::recurrence::{OccurrenceTransaction, RecurrenceInterval, detecter_recurrences};
 use crate::domain::regle_categorisation::{RegleCategorisation, selectionner_regle};
 use crate::domain::transaction_bancaire::{
