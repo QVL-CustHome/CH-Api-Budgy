@@ -4,7 +4,8 @@ use crate::domain::budget::Budget;
 use crate::domain::category::{Category, CategoryId};
 use crate::domain::compte::ProprietaireId;
 use crate::domain::consent::{Consent, ConsentId};
-use crate::domain::depense::{Mois, RepartitionDepenses};
+use crate::domain::cycle::CycleMensuel;
+use crate::domain::depense::RepartitionDepenses;
 use crate::domain::previsionnel::OccurrenceRecurrente;
 use crate::domain::regle_categorisation::RegleCategorisation;
 use crate::domain::transaction_bancaire::{SensTransaction, TransactionBancaire, TriTransactions};
@@ -160,7 +161,7 @@ pub trait DepensesReadRepository: Send + Sync {
     fn repartition_mensuelle_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
     ) -> impl Future<Output = Result<RepartitionDepenses, LectureError>> + Send;
 
     /// Pendant du précédent côté crédits : les revenus du mois regroupés par
@@ -170,7 +171,7 @@ pub trait DepensesReadRepository: Send + Sync {
     fn repartition_mensuelle_revenus_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
     ) -> impl Future<Output = Result<RepartitionDepenses, LectureError>> + Send;
 }
 

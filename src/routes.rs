@@ -66,6 +66,24 @@ fn public_routes() -> Router<AppState> {
             "/budgets/remaining",
             get(handlers::budgets::remaining_budgets),
         )
+        .route(
+            "/preferences",
+            get(handlers::preferences::get_preferences)
+                .put(handlers::preferences::update_preferences),
+        )
+        .route(
+            "/enveloppes",
+            get(handlers::enveloppes::list_enveloppes).post(handlers::enveloppes::create_enveloppe),
+        )
+        .route(
+            "/enveloppes/{enveloppe_id}",
+            put(handlers::enveloppes::update_enveloppe)
+                .delete(handlers::enveloppes::delete_enveloppe),
+        )
+        .route(
+            "/transactions/{transaction_id}/enveloppe",
+            put(handlers::enveloppes::affecter_transaction),
+        )
         .route("/forecast", get(handlers::previsionnel::get_forecast))
         .route(
             "/expenses/by-category",

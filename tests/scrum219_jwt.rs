@@ -9,6 +9,8 @@ use ch_api_budgy::repository::budgets::SqlxBudgetsRepository;
 use ch_api_budgy::repository::categories::SqlxCategoriesRepository;
 use ch_api_budgy::repository::consents::SqlxConsentsWriteAdapter;
 use ch_api_budgy::repository::depenses::SqlxDepensesRepository;
+use ch_api_budgy::repository::enveloppes::SqlxEnveloppesRepository;
+use ch_api_budgy::repository::preferences::SqlxPreferencesRepository;
 use ch_api_budgy::repository::regles_categorisation::SqlxReglesCategorisationRepository;
 use ch_api_budgy::routes::router;
 use ch_api_budgy::services::jwt::{Claims, JwtService, JwtValidationError};
@@ -230,6 +232,8 @@ fn test_state() -> AppState {
         categories: Arc::new(SqlxCategoriesRepository::new(db.clone())),
         budgets: Arc::new(SqlxBudgetsRepository::new(db.clone())),
         depenses: Arc::new(SqlxDepensesRepository::new(db.clone(), crypto.clone())),
+        enveloppes: Arc::new(SqlxEnveloppesRepository::new(db.clone(), crypto.clone())),
+        preferences: Arc::new(SqlxPreferencesRepository::new(db.clone())),
         regles_categorisation: Arc::new(SqlxReglesCategorisationRepository::new(db.clone())),
         bank_accounts: Arc::new(SqlxBankAccountsWriteAdapter::new(
             db.clone(),

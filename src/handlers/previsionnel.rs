@@ -10,6 +10,7 @@ use crate::domain::previsionnel::calculer_previsionnel;
 use crate::extract::BudgyUser;
 use crate::handlers::commun::{categories_par_id, parse_month};
 use crate::handlers::dto::ForecastDto;
+use crate::handlers::preferences::cycle_du_mois;
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -28,6 +29,8 @@ pub async fn get_forecast(
     let mois = parse_month(query.month.as_deref())?;
     let proprietaire = ProprietaireId(user.owner_id().to_string());
 
+    let cycle = cycle_du_mois(&state, &proprietaire, mois).await?;
+
     let budgets = state
         .budgets
         .lister_par_mois(&proprietaire, mois.premier_jour())
@@ -40,13 +43,13 @@ pub async fn get_forecast(
     // catégorie. Contourne la détection à montant fixe, aveugle à un salaire
     // dont le montant et le libellé changent chaque mois.
     let mut historique_revenus = Vec::with_capacity(MOIS_HISTORIQUE);
-    let mut mois_precedent = mois;
+    let mut cycle_precedent = cycle;
     for _ in 0..MOIS_HISTORIQUE {
-        mois_precedent = mois_precedent.precedent();
+        cycle_precedent = cycle_precedent.precedent();
         historique_revenus.push(
             state
                 .depenses
-                .repartition_mensuelle_revenus_par_categorie(&proprietaire, mois_precedent)
+                .repartition_mensuelle_revenus_par_categorie(&proprietaire, cycle_precedent)
                 .await?,
         );
     }

@@ -5,8 +5,10 @@ pub mod budget;
 pub mod category;
 pub mod compte;
 pub mod consent;
+pub mod cycle;
 pub mod depense;
 pub mod effacement;
+pub mod enveloppe;
 pub mod horloge;
 pub mod libelle;
 pub mod ports;
@@ -25,6 +27,11 @@ pub use budget::{Budget, BudgetId, MoisBudget, MontantPrevu, NouveauBudget};
 pub use category::{Category, CategoryId, CategoryKind};
 pub use consent::{
     Consent, ConsentId, ConsentStatus, MiseAJourConsent, NouveauConsent, NouveauConsentInitie,
+};
+pub use cycle::{CycleMensuel, JourDebutInvalide, JourDebutMois};
+pub use enveloppe::{
+    Enveloppe, EnveloppeId, EnveloppeNom, EnveloppeValidationError, MiseAJourEnveloppe,
+    MontantEnveloppe, NouvelleEnveloppe, SuiviEnveloppe,
 };
 pub use ports::bank_data_source::{
     BankDataSource, ConsentementInitie, DemandeConsentement, Etablissement, ReponseAutorisation,

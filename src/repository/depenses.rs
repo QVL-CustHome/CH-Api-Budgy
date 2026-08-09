@@ -2,7 +2,8 @@ use crate::crypto::CryptoService;
 use crate::db::Db;
 use crate::domain::category::Category;
 use crate::domain::compte::ProprietaireId;
-use crate::domain::depense::{LigneDepenseCategorie, Mois, RepartitionDepenses};
+use crate::domain::cycle::CycleMensuel;
+use crate::domain::depense::{LigneDepenseCategorie, RepartitionDepenses};
 use crate::domain::ports::lecture::{DepensesReadRepository, LectureError};
 use crate::repository::bank_transactions::{FIELD_AMOUNT, TABLE};
 use crate::repository::categories::{CategoryRow, into_category};
@@ -41,7 +42,7 @@ impl SqlxDepensesRepository {
     async fn montants_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
         sens: Sens,
     ) -> Result<HashMap<Option<Uuid>, i64>, LectureError> {
         let rows: Vec<(Option<Uuid>, Vec<u8>)> = sqlx::query_as(
@@ -54,8 +55,8 @@ impl SqlxDepensesRepository {
              AND COALESCE(t.booking_date, t.value_date) < $3",
         )
         .bind(&proprietaire.0)
-        .bind(mois.premier_jour())
-        .bind(mois.premier_jour_mois_suivant())
+        .bind(cycle.debut())
+        .bind(cycle.fin_exclue())
         .fetch_all(&self.db)
         .await
         .map_err(|e| LectureError::Acces(e.to_string()))?;
@@ -102,11 +103,11 @@ impl SqlxDepensesRepository {
     async fn repartition(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
         sens: Sens,
     ) -> Result<RepartitionDepenses, LectureError> {
         let totaux = self
-            .montants_par_categorie(proprietaire, mois, sens)
+            .montants_par_categorie(proprietaire, cycle, sens)
             .await?;
         if totaux.is_empty() {
             return Ok(RepartitionDepenses {
@@ -139,17 +140,17 @@ impl DepensesReadRepository for SqlxDepensesRepository {
     async fn repartition_mensuelle_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
     ) -> Result<RepartitionDepenses, LectureError> {
-        self.repartition(proprietaire, mois, Sens::Debit).await
+        self.repartition(proprietaire, cycle, Sens::Debit).await
     }
 
     async fn repartition_mensuelle_revenus_par_categorie(
         &self,
         proprietaire: &ProprietaireId,
-        mois: Mois,
+        cycle: CycleMensuel,
     ) -> Result<RepartitionDepenses, LectureError> {
-        self.repartition(proprietaire, mois, Sens::Credit).await
+        self.repartition(proprietaire, cycle, Sens::Credit).await
     }
 }
 

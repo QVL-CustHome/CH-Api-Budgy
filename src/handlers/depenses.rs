@@ -5,6 +5,7 @@ use crate::domain::depense::Mois;
 use crate::domain::ports::lecture::DepensesReadRepository;
 use crate::extract::BudgyUser;
 use crate::handlers::dto::MonthlyExpensesDto;
+use crate::handlers::preferences::cycle_du_mois;
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -23,9 +24,11 @@ pub async fn expenses_by_category(
     let mois = parse_month(query.month.as_deref())?;
     let proprietaire = ProprietaireId(user.owner_id().to_string());
 
+    let cycle = cycle_du_mois(&state, &proprietaire, mois).await?;
+
     let repartition = state
         .depenses
-        .repartition_mensuelle_par_categorie(&proprietaire, mois)
+        .repartition_mensuelle_par_categorie(&proprietaire, cycle)
         .await?;
 
     Ok(Json(MonthlyExpensesDto::depuis(mois, repartition)))

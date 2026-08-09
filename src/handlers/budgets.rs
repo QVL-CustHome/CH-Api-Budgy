@@ -13,6 +13,7 @@ use crate::domain::reste_a_depenser::{
 use crate::extract::BudgyUser;
 use crate::handlers::commun::{categories_par_id, parse_month};
 use crate::handlers::dto::{BudgetDto, BudgetQuery, RemainingBudgetDto, UpsertBudgetRequest};
+use crate::handlers::preferences::cycle_du_mois;
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -74,24 +75,26 @@ pub async fn remaining_budgets(
     let mois = parse_month(query.month.as_deref())?;
     let proprietaire = ProprietaireId(user.owner_id().to_string());
 
+    let cycle = cycle_du_mois(&state, &proprietaire, mois).await?;
+
     let budgets = state
         .budgets
         .lister_par_mois(&proprietaire, mois.premier_jour())
         .await?;
     let depenses = state
         .depenses
-        .repartition_mensuelle_par_categorie(&proprietaire, mois)
+        .repartition_mensuelle_par_categorie(&proprietaire, cycle)
         .await?;
     // Historique glissant : on prédit sur la médiane de plusieurs mois plutôt
     // que sur le seul mois précédent, pour lisser les dépenses exceptionnelles.
     let mut historique = Vec::with_capacity(MOIS_HISTORIQUE);
-    let mut mois_precedent = mois;
+    let mut cycle_precedent = cycle;
     for _ in 0..MOIS_HISTORIQUE {
-        mois_precedent = mois_precedent.precedent();
+        cycle_precedent = cycle_precedent.precedent();
         historique.push(
             state
                 .depenses
-                .repartition_mensuelle_par_categorie(&proprietaire, mois_precedent)
+                .repartition_mensuelle_par_categorie(&proprietaire, cycle_precedent)
                 .await?,
         );
     }
