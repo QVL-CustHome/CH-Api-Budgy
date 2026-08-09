@@ -378,6 +378,7 @@ fn transaction(
         booking_date: None,
         value_date: None,
         category: None,
+        enveloppe: None,
         categorization_source: CategorizationSource::None,
         rule_id: None,
         is_recurrent: false,

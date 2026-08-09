@@ -177,6 +177,7 @@ pub fn vers_transaction(
         booking_date: parser_date(&transaction.booking_date),
         value_date: parser_date(&transaction.value_date),
         category: None,
+        enveloppe: None,
         categorization_source: CategorizationSource::None,
         rule_id: None,
         is_recurrent: false,

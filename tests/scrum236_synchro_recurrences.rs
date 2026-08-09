@@ -285,6 +285,7 @@ fn occurrence(reference: &str, amount_cents: i64, jour: NaiveDate) -> Transactio
         booking_date: Some(jour),
         value_date: Some(jour),
         category: None,
+        enveloppe: None,
         categorization_source: CategorizationSource::None,
         rule_id: None,
         is_recurrent: false,

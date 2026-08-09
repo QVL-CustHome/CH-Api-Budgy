@@ -433,6 +433,7 @@ pub struct BankTransactionDto {
     pub booking_date: Option<NaiveDate>,
     pub value_date: Option<NaiveDate>,
     pub category_id: Option<Uuid>,
+    pub enveloppe_id: Option<Uuid>,
     pub categorization_source: CategorizationSourceDto,
 }
 
@@ -449,6 +450,7 @@ impl From<TransactionBancaire> for BankTransactionDto {
             booking_date: transaction.booking_date,
             value_date: transaction.value_date,
             category_id: transaction.category.map(|c| c.0),
+            enveloppe_id: transaction.enveloppe,
             categorization_source: transaction.categorization_source.into(),
         }
     }

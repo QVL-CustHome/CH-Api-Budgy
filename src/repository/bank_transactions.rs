@@ -127,7 +127,7 @@ impl SqlxBankTransactionsRepository {
         let Some(row) = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.category_id, t.enveloppe_id, t.categorization_source, t.rule_id, t.is_recurrent, \
              t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
@@ -170,7 +170,7 @@ impl SqlxBankTransactionsRepository {
         let rows = sqlx::query_as::<_, BankTransactionRow>(&format!(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.category_id, t.enveloppe_id, t.categorization_source, t.rule_id, t.is_recurrent, \
              t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
@@ -211,7 +211,7 @@ impl SqlxBankTransactionsRepository {
         let rows = sqlx::query_as::<_, BankTransactionRow>(
             "SELECT t.id, t.bank_account_id, a.owner_id, t.external_transaction_id, t.status, \
              t.label, t.amount_cents, t.currency, t.booking_date, t.value_date, \
-             t.category_id, t.categorization_source, t.rule_id, t.is_recurrent, \
+             t.category_id, t.enveloppe_id, t.categorization_source, t.rule_id, t.is_recurrent, \
              t.recurrence_interval, t.created_at \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
@@ -1023,47 +1023,52 @@ fn trier(transactions: &mut [TransactionBancaire], tri: TriTransactions) {
     });
 }
 
-type BankTransactionRow = (
-    Uuid,
-    Uuid,
-    String,
-    Vec<u8>,
-    String,
-    Vec<u8>,
-    Vec<u8>,
-    String,
-    Option<NaiveDate>,
-    Option<NaiveDate>,
-    Option<Uuid>,
-    String,
-    Option<Uuid>,
-    bool,
-    Option<String>,
-    DateTime<Utc>,
-);
+/// sqlx ne dérive `FromRow` que jusqu'à seize colonnes : au-delà, il faut une
+/// structure nommée. L'ordre des champs doit suivre celui du SELECT.
+#[derive(sqlx::FromRow)]
+struct BankTransactionRow {
+    id: Uuid,
+    bank_account_id: Uuid,
+    owner_id: String,
+    external_transaction_id: Vec<u8>,
+    status: String,
+    label: Vec<u8>,
+    amount_cents: Vec<u8>,
+    currency: String,
+    booking_date: Option<NaiveDate>,
+    value_date: Option<NaiveDate>,
+    category_id: Option<Uuid>,
+    enveloppe_id: Option<Uuid>,
+    categorization_source: String,
+    rule_id: Option<Uuid>,
+    is_recurrent: bool,
+    recurrence_interval: Option<String>,
+    created_at: DateTime<Utc>,
+}
 
 fn into_transaction(
     crypto: &CryptoService,
     row: BankTransactionRow,
 ) -> Result<TransactionBancaire, ChiffrementError> {
-    let (
+    let BankTransactionRow {
         id,
         bank_account_id,
         owner_id,
-        external_transaction_id_blob,
+        external_transaction_id: external_transaction_id_blob,
         status,
-        label_blob,
-        amount_blob,
+        label: label_blob,
+        amount_cents: amount_blob,
         currency,
         booking_date,
         value_date,
         category_id,
+        enveloppe_id,
         categorization_source,
         rule_id,
         is_recurrent,
         recurrence_interval,
         created_at,
-    ) = row;
+    } = row;
 
     let external_transaction_id = dechiffrer_texte(
         crypto,
@@ -1097,6 +1102,7 @@ fn into_transaction(
         booking_date,
         value_date,
         category: category_id.map(CategoryId),
+        enveloppe: enveloppe_id,
         categorization_source,
         rule_id,
         is_recurrent,

@@ -101,6 +101,8 @@ pub struct TransactionBancaire {
     pub booking_date: Option<NaiveDate>,
     pub value_date: Option<NaiveDate>,
     pub category: Option<CategoryId>,
+    /// Budget libre, indépendant de la catégorie : une transaction peut porter les deux.
+    pub enveloppe: Option<Uuid>,
     pub categorization_source: CategorizationSource,
     pub rule_id: Option<Uuid>,
     pub is_recurrent: bool,
