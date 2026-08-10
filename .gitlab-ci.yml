@@ -29,3 +29,25 @@ secret-scan:
 test:
   script:
     - cargo test -- --test-threads=1
+
+# auto-pull du clone local persistant sur /mnt/c (evite les checkouts perimes)
+#
+# Deux pieges evites ici. D'abord `pull --ff-only origin main` avance la branche
+# COURANTE : sur un clone reste sur une branche de travail, il faisait avancer
+# celle-ci et laissait `main` gele, sans jamais le dire. Ensuite le fetch depend
+# d'identifiants gitlab.com que le clone n'a pas forcement en cache, et l'echec
+# passait inapercu. On se replace donc explicitement sur main, et on fetch avec
+# le jeton du job.
+update-checkout:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  allow_failure: true
+  dependencies: []
+  variables:
+    CLONE_LOCAL: /mnt/c/QVL/QVL-CustHome/CH-Api-Budgy
+  script:
+    - git -C "$CLONE_LOCAL" fetch "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git" main
+    - git -C "$CLONE_LOCAL" checkout main
+    - git -C "$CLONE_LOCAL" merge --ff-only FETCH_HEAD
+    - git -C "$CLONE_LOCAL" log --oneline -1
