@@ -334,6 +334,7 @@ async fn semer_depense_recurrente(
     compte: &BankAccountId,
     montant_cents: i64,
 ) -> [Uuid; 3] {
+    let montant_cents = -montant_cents.abs();
     [
         semer_transaction(
             db,
@@ -373,7 +374,7 @@ fn entier(corps: &Value, cle: &str) -> i64 {
 }
 
 #[tokio::test]
-async fn ca01_solde_previsionnel_est_revenus_moins_depenses_moins_budgets() {
+async fn ca01_solde_projete_part_du_solde_actuel() {
     let db = db_or_skip!();
     let compte = semer_compte(&db, ALICE).await;
     let salaire = categorie_id_par_nom(&db, ALICE, "Salaire").await;
@@ -397,26 +398,27 @@ async fn ca01_solde_previsionnel_est_revenus_moins_depenses_moins_budgets() {
     assert_eq!(corps["month"], json!(MOIS_PREVU));
     assert_eq!(corps["donnees_suffisantes"], json!(true), "{corps}");
 
-    let revenus_cents = entier(&corps, "revenus_recurrents_cents");
-    let depenses_cents = entier(&corps, "depenses_recurrentes_cents");
-    let budgets_cents = entier(&corps, "budgets_cents");
+    let solde_actuel_cents = entier(&corps, "solde_actuel_cents");
+    let revenus_cents = entier(&corps, "revenus_restants_cents");
+    let depenses_cents = entier(&corps, "depenses_restantes_cents");
     let solde_cents = entier(&corps, "solde_previsionnel_cents");
 
     assert_eq!(
         solde_cents,
-        revenus_cents - depenses_cents - budgets_cents,
-        "solde prévisionnel doit valoir revenus - dépenses - budgets : {corps}"
+        solde_actuel_cents + revenus_cents - depenses_cents,
+        "le solde projeté doit valoir solde actuel + revenus restants - dépenses restantes : {corps}"
     );
     assert_eq!(revenus_cents, 200_000, "{corps}");
     assert_eq!(depenses_cents, 80_000, "{corps}");
-    assert_eq!(budgets_cents, 30_000, "{corps}");
-    assert_eq!(solde_cents, 90_000, "{corps}");
+    // Un budget mensuel par catégorie ne pèse plus sur la projection : elle
+    // porte sur la trésorerie, pas sur le respect d'une enveloppe.
+    assert_eq!(solde_cents, solde_actuel_cents + 120_000, "{corps}");
 
     db.destroy().await;
 }
 
 #[tokio::test]
-async fn ca01_sans_budget_le_solde_egale_revenus_moins_depenses() {
+async fn ca01_le_solde_projete_suit_revenus_et_depenses_restants() {
     let db = db_or_skip!();
     let compte = semer_compte(&db, ALICE).await;
     let salaire = categorie_id_par_nom(&db, ALICE, "Salaire").await;
@@ -435,12 +437,11 @@ async fn ca01_sans_budget_le_solde_egale_revenus_moins_depenses() {
     let (status, corps) = forecast(&db, ALICE, MOIS_PREVU).await;
 
     assert_eq!(status, StatusCode::OK, "{corps}");
-    assert_eq!(entier(&corps, "budgets_cents"), 0, "{corps}");
-    let revenus_cents = entier(&corps, "revenus_recurrents_cents");
-    let depenses_cents = entier(&corps, "depenses_recurrentes_cents");
+    let revenus_cents = entier(&corps, "revenus_restants_cents");
+    let depenses_cents = entier(&corps, "depenses_restantes_cents");
     assert_eq!(
         entier(&corps, "solde_previsionnel_cents"),
-        revenus_cents - depenses_cents,
+        entier(&corps, "solde_actuel_cents") + revenus_cents - depenses_cents,
         "{corps}"
     );
     assert_eq!(revenus_cents, 210_000, "{corps}");
@@ -464,13 +465,8 @@ async fn ca01_revenus_recurrents_seuls_donnent_un_solde_positif() {
     let (status, corps) = forecast(&db, ALICE, MOIS_PREVU).await;
 
     assert_eq!(status, StatusCode::OK, "{corps}");
-    assert_eq!(
-        entier(&corps, "revenus_recurrents_cents"),
-        180_000,
-        "{corps}"
-    );
-    assert_eq!(entier(&corps, "depenses_recurrentes_cents"), 0, "{corps}");
-    assert_eq!(entier(&corps, "budgets_cents"), 0, "{corps}");
+    assert_eq!(entier(&corps, "revenus_restants_cents"), 180_000, "{corps}");
+    assert_eq!(entier(&corps, "depenses_restantes_cents"), 0, "{corps}");
     assert_eq!(
         entier(&corps, "solde_previsionnel_cents"),
         180_000,
@@ -495,13 +491,12 @@ async fn ca01_depenses_recurrentes_seules_donnent_un_solde_negatif() {
     let (status, corps) = forecast(&db, ALICE, MOIS_PREVU).await;
 
     assert_eq!(status, StatusCode::OK, "{corps}");
-    assert_eq!(entier(&corps, "revenus_recurrents_cents"), 0, "{corps}");
+    assert_eq!(entier(&corps, "revenus_restants_cents"), 0, "{corps}");
     assert_eq!(
-        entier(&corps, "depenses_recurrentes_cents"),
+        entier(&corps, "depenses_restantes_cents"),
         95_000,
         "{corps}"
     );
-    assert_eq!(entier(&corps, "budgets_cents"), 0, "{corps}");
     assert_eq!(
         entier(&corps, "solde_previsionnel_cents"),
         -95_000,
@@ -559,11 +554,11 @@ async fn un_salaire_a_montant_et_libelle_variables_est_pris_en_compte() {
         "un salaire variable doit suffire à établir un prévisionnel : {corps}"
     );
     assert_eq!(
-        entier(&corps, "revenus_recurrents_cents"),
+        entier(&corps, "revenus_restants_cents"),
         121_788,
         "médiane de 1217,88 / 1301,83 / 1209,26 : {corps}"
     );
-    assert_eq!(entier(&corps, "depenses_recurrentes_cents"), 0, "{corps}");
+    assert_eq!(entier(&corps, "depenses_restantes_cents"), 0, "{corps}");
     assert_eq!(
         entier(&corps, "solde_previsionnel_cents"),
         121_788,
@@ -604,7 +599,7 @@ async fn un_credit_range_dans_une_categorie_de_depense_n_est_pas_un_revenu() {
 
     assert_eq!(status, StatusCode::OK, "{corps}");
     assert_eq!(
-        entier(&corps, "revenus_recurrents_cents"),
+        entier(&corps, "revenus_restants_cents"),
         200_000,
         "seul le salaire doit compter comme revenu : {corps}"
     );
@@ -647,46 +642,21 @@ async fn ca02_detail_par_categorie_est_coherent_avec_les_totaux_de_tete() {
     };
 
     let ligne_salaire = ligne(&salaire);
-    assert_eq!(
-        entier(&ligne_salaire, "revenus_recurrents_cents"),
-        200_000,
-        "{corps}"
-    );
+    assert_eq!(entier(&ligne_salaire, "restant_cents"), 200_000, "{corps}");
 
     let ligne_loyer = ligne(&loyer);
-    assert_eq!(
-        entier(&ligne_loyer, "depenses_recurrentes_cents"),
-        80_000,
-        "{corps}"
-    );
+    assert_eq!(entier(&ligne_loyer, "restant_cents"), 80_000, "{corps}");
 
-    let ligne_courses = ligne(&courses);
-    assert_eq!(entier(&ligne_courses, "budget_cents"), 30_000, "{corps}");
-
-    let somme_revenus: i64 = categories
+    let somme_restants: i64 = categories
         .iter()
-        .map(|c| c["revenus_recurrents_cents"].as_i64().unwrap_or(0))
-        .sum();
-    let somme_depenses: i64 = categories
-        .iter()
-        .map(|c| c["depenses_recurrentes_cents"].as_i64().unwrap_or(0))
-        .sum();
-    let somme_budgets: i64 = categories
-        .iter()
-        .map(|c| c["budget_cents"].as_i64().unwrap_or(0))
+        .map(|c| c["restant_cents"].as_i64().unwrap_or(0))
         .sum();
 
     assert_eq!(
-        somme_revenus,
-        entier(&corps, "revenus_recurrents_cents"),
-        "{corps}"
+        somme_restants,
+        entier(&corps, "revenus_restants_cents") + entier(&corps, "depenses_restantes_cents"),
+        "le détail par catégorie doit couvrir exactement les totaux de tête : {corps}"
     );
-    assert_eq!(
-        somme_depenses,
-        entier(&corps, "depenses_recurrentes_cents"),
-        "{corps}"
-    );
-    assert_eq!(somme_budgets, entier(&corps, "budgets_cents"), "{corps}");
 
     db.destroy().await;
 }
@@ -740,16 +710,15 @@ async fn isolation_le_previsionnel_d_un_owner_ignore_les_donnees_d_un_autre() {
     let (status_bob, corps_bob) = forecast(&db, BOB, MOIS_PREVU).await;
     assert_eq!(status_bob, StatusCode::OK, "{corps_bob}");
     assert_eq!(
-        entier(&corps_bob, "revenus_recurrents_cents"),
+        entier(&corps_bob, "revenus_restants_cents"),
         0,
         "{corps_bob}"
     );
     assert_eq!(
-        entier(&corps_bob, "depenses_recurrentes_cents"),
+        entier(&corps_bob, "depenses_restantes_cents"),
         0,
         "{corps_bob}"
     );
-    assert_eq!(entier(&corps_bob, "budgets_cents"), 0, "{corps_bob}");
     assert_eq!(
         corps_bob["donnees_suffisantes"],
         json!(false),
@@ -759,7 +728,7 @@ async fn isolation_le_previsionnel_d_un_owner_ignore_les_donnees_d_un_autre() {
     let (status_alice, corps_alice) = forecast(&db, ALICE, MOIS_PREVU).await;
     assert_eq!(status_alice, StatusCode::OK, "{corps_alice}");
     assert_eq!(
-        entier(&corps_alice, "revenus_recurrents_cents"),
+        entier(&corps_alice, "revenus_restants_cents"),
         250_000,
         "{corps_alice}"
     );

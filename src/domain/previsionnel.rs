@@ -168,10 +168,7 @@ mod tests {
     }
 
     fn index(categories: &[&Category]) -> HashMap<Uuid, Category> {
-        categories
-            .iter()
-            .map(|c| (c.id.0, (*c).clone()))
-            .collect()
+        categories.iter().map(|c| (c.id.0, (*c).clone())).collect()
     }
 
     #[test]
