@@ -122,6 +122,34 @@ pub async fn complete_consent(
         .await?;
 
     let comptes_bancaires = state.bank_source.lister_comptes(&actif).await?;
+
+    // La banque n'est pas forcément fiable sur « à qui » appartient ce qu'elle
+    // renvoie : en production restreinte, Enable Banking a déjà rendu le compte
+    // d'un utilisateur à la session d'autorisation d'un autre. On refuse en bloc
+    // plutôt que d'importer des opérations qui ne sont pas les siennes.
+    for compte in &comptes_bancaires {
+        if let Some(autre) = state
+            .bank_accounts
+            .proprietaire_concurrent(&compte.external_account_id, &proprietaire)
+            .await?
+        {
+            tracing::error!(
+                demandeur = %proprietaire.0,
+                deja_rattache_a = %autre.0,
+                consent = %consent_id.0,
+                "Rattachement refusé : la banque a renvoyé un compte appartenant à un autre utilisateur"
+            );
+            state
+                .consents
+                .marquer_statut(&proprietaire, &consent_id, ConsentStatus::Failed)
+                .await?;
+            return Err(ApiError::conflict(
+                "ce compte bancaire est déjà rattaché à un autre utilisateur : \
+                 rattachement annulé",
+            ));
+        }
+    }
+
     for compte in &comptes_bancaires {
         state
             .bank_accounts

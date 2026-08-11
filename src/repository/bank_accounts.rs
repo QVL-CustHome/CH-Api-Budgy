@@ -28,12 +28,26 @@ const TABLE: &str = "bank_account";
 const FIELD_EXTERNAL_ACCOUNT_ID: &str = "external_account_id";
 const FIELD_IBAN: &str = "iban";
 
+/// Contexte de l'empreinte d'un compte : fixe, donc indépendant du propriétaire
+/// et du consentement. C'est ce qui permet de reconnaître un même compte
+/// bancaire d'un utilisateur à l'autre.
+const CONTEXTE_EMPREINTE_COMPTE: &[u8] = b"budgy:v1:compte-bancaire";
+
 fn dedup_key_compte(
     crypto: &CryptoService,
     consent: &ConsentId,
     external_account_id: &str,
 ) -> String {
     crypto.dedup_key(consent.0.as_bytes(), external_account_id)
+}
+
+/// Empreinte stable d'un compte bancaire, tous propriétaires confondus.
+///
+/// À ne pas confondre avec [`dedup_key_compte`], qui dérive du consentement et
+/// sert au dédoublonnage à l'intérieur d'un rattachement. Ici on cherche
+/// l'inverse : reconnaître le même compte **au-delà** du propriétaire.
+fn empreinte_compte(crypto: &CryptoService, external_account_id: &str) -> String {
+    crypto.dedup_key(CONTEXTE_EMPREINTE_COMPTE, external_account_id)
 }
 
 #[derive(Clone)]
@@ -62,11 +76,12 @@ impl SqlxBankAccountsRepository {
         let iban_encrypted = chiffrer_texte(crypto, owner, TABLE, FIELD_IBAN, &nouveau.iban)?;
         let iban_masked = masquer_iban(&nouveau.iban);
         let dedup = dedup_key_compte(crypto, &nouveau.consent, &nouveau.external_account_id);
+        let empreinte = empreinte_compte(crypto, &nouveau.external_account_id);
 
         let id: Option<Uuid> = sqlx::query_scalar(
             "INSERT INTO budgy.bank_account \
-             (owner_id, consent_id, external_account_id, iban_encrypted, iban_masked, currency, next_sync_at, sync_count_today, key_version, dedup_key) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9) \
+             (owner_id, consent_id, external_account_id, iban_encrypted, iban_masked, currency, next_sync_at, sync_count_today, key_version, dedup_key, empreinte_compte) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10) \
              ON CONFLICT ON CONSTRAINT bank_account_consent_dedup_unique DO NOTHING \
              RETURNING id",
         )
@@ -79,6 +94,7 @@ impl SqlxBankAccountsRepository {
         .bind(nouveau.next_sync_at)
         .bind(KEY_VERSION)
         .bind(&dedup)
+        .bind(&empreinte)
         .fetch_optional(&self.db)
         .await?;
 
@@ -86,6 +102,60 @@ impl SqlxBankAccountsRepository {
             Some(id) => Ok(BankAccountId(id)),
             None => self.fetch_id_par_dedup(&nouveau.consent.0, &dedup).await,
         }
+    }
+
+    /// À qui appartient déjà ce compte bancaire, si ce n'est pas à `demandeur` ?
+    ///
+    /// Sert de garde-fou au rattachement : la banque peut renvoyer un compte qui
+    /// n'est pas celui de la personne qui vient de s'authentifier. Dans ce cas
+    /// mieux vaut refuser bruyamment que d'importer en silence.
+    pub async fn proprietaire_concurrent(
+        &self,
+        crypto: &CryptoService,
+        external_account_id: &str,
+        demandeur: &ProprietaireId,
+    ) -> Result<Option<ProprietaireId>, ChiffrementError> {
+        let empreinte = empreinte_compte(crypto, external_account_id);
+        let autre: Option<String> = sqlx::query_scalar(
+            "SELECT owner_id FROM budgy.bank_account \
+             WHERE empreinte_compte = $1 AND owner_id <> $2 LIMIT 1",
+        )
+        .bind(&empreinte)
+        .bind(&demandeur.0)
+        .fetch_optional(&self.db)
+        .await?;
+
+        Ok(autre.map(ProprietaireId))
+    }
+
+    /// Calcule l'empreinte des comptes enregistrés avant l'ajout de la colonne.
+    ///
+    /// Sans cette reprise, un compte déjà en base resterait invisible au
+    /// contrôle : c'est précisément lui qu'on cherche à protéger. Idempotent, ne
+    /// touche que les lignes dont l'empreinte manque.
+    pub async fn reprendre_empreintes(
+        &self,
+        crypto: &CryptoService,
+    ) -> Result<u64, ChiffrementError> {
+        let lignes: Vec<(Uuid, String, Vec<u8>)> = sqlx::query_as(
+            "SELECT id, owner_id, external_account_id FROM budgy.bank_account \
+             WHERE empreinte_compte IS NULL",
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut reprises = 0;
+        for (id, owner, chiffre) in lignes {
+            let externe =
+                dechiffrer_texte(crypto, &owner, TABLE, FIELD_EXTERNAL_ACCOUNT_ID, &chiffre)?;
+            sqlx::query("UPDATE budgy.bank_account SET empreinte_compte = $2 WHERE id = $1")
+                .bind(id)
+                .bind(empreinte_compte(crypto, &externe))
+                .execute(&self.db)
+                .await?;
+            reprises += 1;
+        }
+        Ok(reprises)
     }
 
     async fn fetch_id_par_dedup(
@@ -393,6 +463,26 @@ impl SqlxBankAccountsWriteAdapter {
             repo: SqlxBankAccountsRepository::new(db),
             crypto,
         }
+    }
+
+    /// Voir [`SqlxBankAccountsRepository::proprietaire_concurrent`].
+    pub async fn proprietaire_concurrent(
+        &self,
+        external_account_id: &str,
+        demandeur: &ProprietaireId,
+    ) -> Result<Option<ProprietaireId>, EcritureError> {
+        self.repo
+            .proprietaire_concurrent(&self.crypto, external_account_id, demandeur)
+            .await
+            .map_err(vers_ecriture_error)
+    }
+
+    /// Voir [`SqlxBankAccountsRepository::reprendre_empreintes`].
+    pub async fn reprendre_empreintes(&self) -> Result<u64, EcritureError> {
+        self.repo
+            .reprendre_empreintes(&self.crypto)
+            .await
+            .map_err(vers_ecriture_error)
     }
 }
 

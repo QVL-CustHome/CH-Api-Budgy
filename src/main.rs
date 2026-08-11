@@ -46,6 +46,16 @@ async fn main() {
     let port = settings.config.server.port;
     let state = AppState::new(&settings, pool);
 
+    // Empreintes des comptes enregistrés avant la migration 0019 : sans elles,
+    // un compte déjà en base resterait invisible au contrôle de rattachement,
+    // alors que c'est justement lui qu'on protège. Idempotent, et non bloquant
+    // au démarrage — un échec ici ne doit pas empêcher l'API de répondre.
+    match state.bank_accounts.reprendre_empreintes().await {
+        Ok(0) => {}
+        Ok(n) => tracing::info!(comptes = n, "Empreintes de comptes bancaires calculées"),
+        Err(e) => tracing::error!(error = %e, "Reprise des empreintes de comptes en échec"),
+    }
+
     let handler = Arc::new(UserDeletedHandler::new(
         state.db.clone(),
         state.crypto.clone(),
