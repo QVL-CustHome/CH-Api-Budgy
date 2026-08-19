@@ -435,6 +435,11 @@ pub struct BankTransactionDto {
     pub category_id: Option<Uuid>,
     pub enveloppe_id: Option<Uuid>,
     pub categorization_source: CategorizationSourceDto,
+    /// Virement entre deux comptes du propriétaire : affiché, mais exclu des
+    /// dépenses, des revenus et du prévisionnel. Sans ce drapeau, la ligne
+    /// paraît comptée alors qu'elle ne l'est pas.
+    #[serde(default)]
+    pub is_internal_transfer: bool,
 }
 
 impl From<TransactionBancaire> for BankTransactionDto {
@@ -452,6 +457,7 @@ impl From<TransactionBancaire> for BankTransactionDto {
             category_id: transaction.category.map(|c| c.0),
             enveloppe_id: transaction.enveloppe,
             categorization_source: transaction.categorization_source.into(),
+            is_internal_transfer: false,
         }
     }
 }

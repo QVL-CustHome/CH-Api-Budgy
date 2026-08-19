@@ -3,6 +3,7 @@ use crate::db::Db;
 use crate::domain::bank_account::BankAccountId;
 use crate::domain::category::CategoryId;
 use crate::domain::compte::ProprietaireId;
+use crate::domain::libelle::extraire_tiers;
 use crate::domain::ports::ecriture::{
     BankTransactionsWriteRepository, EcritureError, ResultatInsertion,
 };
@@ -39,7 +40,16 @@ pub(crate) const FIELD_AMOUNT: &str = "amount_cents";
 const LIMITE_RETROACTIF: i64 = 5000;
 
 type LigneOccurrenceChiffree = (Uuid, Vec<u8>, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
-type LigneMouvementChiffree = (Uuid, Uuid, Vec<u8>, Option<NaiveDate>, Option<NaiveDate>);
+type LigneMouvementChiffree = (
+    Uuid,
+    Uuid,
+    Vec<u8>,
+    Option<NaiveDate>,
+    Option<NaiveDate>,
+    Vec<u8>,
+    Option<Uuid>,
+    String,
+);
 type LigneRecurrenteChiffree = (
     Option<Uuid>,
     Vec<u8>,
@@ -565,7 +575,8 @@ impl SqlxBankTransactionsRepository {
         proprietaire: &ProprietaireId,
     ) -> Result<Vec<MouvementCandidat>, ChiffrementError> {
         let rows: Vec<LigneMouvementChiffree> = sqlx::query_as(
-            "SELECT t.id, t.bank_account_id, t.amount_cents, t.booking_date, t.value_date \
+            "SELECT t.id, t.bank_account_id, t.amount_cents, t.booking_date, t.value_date, \
+             t.label, t.category_id, t.categorization_source \
              FROM budgy.bank_transaction t \
              JOIN budgy.bank_account a ON a.id = t.bank_account_id \
              WHERE a.owner_id = $1",
@@ -575,20 +586,54 @@ impl SqlxBankTransactionsRepository {
         .await?;
 
         let mut mouvements = Vec::with_capacity(rows.len());
-        for (id, bank_account_id, amount_blob, booking_date, value_date) in rows {
+        for (
+            id,
+            bank_account_id,
+            amount_blob,
+            booking_date,
+            value_date,
+            label_blob,
+            category_id,
+            source,
+        ) in rows
+        {
             let Some(date) = booking_date.or(value_date) else {
                 continue;
             };
             let amount_cents =
                 dechiffrer_montant(crypto, &proprietaire.0, TABLE, FIELD_AMOUNT, &amount_blob)?;
+            let libelle_brut =
+                dechiffrer_texte(crypto, &proprietaire.0, TABLE, FIELD_LABEL, &label_blob)?;
+            // Un mouvement rangé à la main dans « Virements internes » n'est pas
+            // un indice contre l'appariement : c'est l'inverse.
+            let range_a_la_main = source == CategorizationSource::Manual.as_str()
+                && category_id.is_some_and(|id| id != CATEGORIE_VIREMENTS_INTERNES);
             mouvements.push(MouvementCandidat {
                 id: TransactionBancaireId(id),
                 compte: BankAccountId(bank_account_id),
                 amount_cents,
                 date,
+                libelle: extraire_tiers(&libelle_brut),
+                range_a_la_main,
             });
         }
         Ok(mouvements)
+    }
+
+    /// Identifiants des mouvements exclus des calculs parce qu'appariés comme
+    /// virements internes. Requête à part plutôt qu'un champ de plus sur
+    /// `TransactionBancaire` : c'est un attribut d'affichage, pas du domaine.
+    pub async fn ids_transferts_internes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<std::collections::HashSet<Uuid>, ChiffrementError> {
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT t.id FROM budgy.bank_transaction t              JOIN budgy.bank_account a ON a.id = t.bank_account_id              WHERE a.owner_id = $1 AND t.is_internal_transfer",
+        )
+        .bind(&proprietaire.0)
+        .fetch_all(&self.db)
+        .await?;
+        Ok(ids.into_iter().collect())
     }
 
     /// Efface le marquage automatique, en préservant les transactions rangées
@@ -767,6 +812,17 @@ impl SqlxBankTransactionsWriteAdapter {
             regles: SqlxReglesCategorisationRepository::new(db),
             crypto,
         }
+    }
+
+    /// Voir [`SqlxBankTransactionsRepository::ids_transferts_internes`].
+    pub async fn ids_transferts_internes(
+        &self,
+        proprietaire: &ProprietaireId,
+    ) -> Result<std::collections::HashSet<Uuid>, EcritureError> {
+        self.repo
+            .ids_transferts_internes(proprietaire)
+            .await
+            .map_err(vers_ecriture_error)
     }
 
     pub async fn categoriser(

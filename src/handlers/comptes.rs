@@ -97,10 +97,21 @@ pub async fn list_account_transactions(
         )
         .await?;
 
+    // Marquer les virements internes : la ligne reste affichée, mais l'API
+    // dit clairement qu'elle ne compte pas dans les totaux.
+    let internes = state
+        .bank_transactions
+        .ids_transferts_internes(&proprietaire)
+        .await?;
     let data = resultat
         .elements
         .into_iter()
-        .map(BankTransactionDto::from)
+        .map(|transaction| {
+            let interne = internes.contains(&transaction.id.0);
+            let mut dto = BankTransactionDto::from(transaction);
+            dto.is_internal_transfer = interne;
+            dto
+        })
         .collect();
     Ok(Json(ListResponse::new(data, resultat.total)))
 }
